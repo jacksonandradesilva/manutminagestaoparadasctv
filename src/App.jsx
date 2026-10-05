@@ -39,6 +39,7 @@ const PAGE_ACCESS_OPTIONS = [
   { key: 'historico-opcoes', label: 'Historico por opcao', path: '/historico-opcoes' },
   { key: 'historico-datas', label: 'Filtro por data', path: '/filtro-datas' },
   { key: 'dashboard-turnos', label: 'Dashboard por turno', path: '/dashboard-turnos' },
+  { key: 'graficos-supervisao', label: 'Graficos por supervisao', path: '/graficos-supervisao' },
   { key: 'agente-ia', label: 'Agente IA', path: '/agente-ia' }
 ];
 
@@ -1010,6 +1011,7 @@ function DashboardPage({ pagePermissions }) {
         {pagePermissions['historico-opcoes'] && <LinkButton to="/historico-opcoes">Historico por Opcao</LinkButton>}
         {pagePermissions['historico-datas'] && <LinkButton to="/filtro-datas">Filtrar Historico por Data</LinkButton>}
         {pagePermissions['dashboard-turnos'] && <LinkButton to="/dashboard-turnos">Dashboard por Turno</LinkButton>}
+        {pagePermissions['graficos-supervisao'] && <LinkButton to="/graficos-supervisao">Graficos por Supervisao</LinkButton>}
         {pagePermissions['agente-ia'] && <LinkButton to="/agente-ia">Agente IA</LinkButton>}
         {equipamentos.some((e) => e.status === 'parado') && (
           <button type="button" className="btn excluir" onClick={limparStatusParado}>Limpar Status Parado</button>
@@ -2295,6 +2297,132 @@ function AgenteIAPage() {
   );
 }
 
+function GraficosSupervisaoPage() {
+  const [historicoParadas, setHistoricoParadas] = useState([]);
+  const [dataInicial, setDataInicial] = useState('');
+  const [dataFinal, setDataFinal] = useState('');
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadHistorico() {
+      const state = await getState();
+      if (active) {
+        setHistoricoParadas(Array.isArray(state.historicoParadas) ? state.historicoParadas : []);
+      }
+    }
+
+    loadHistorico();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const intervaloInvalido = Boolean(dataInicial && dataFinal && dataInicial > dataFinal);
+
+  const paradasFiltradas = useMemo(() => {
+    if (intervaloInvalido) {
+      return [];
+    }
+
+    return historicoParadas.filter((item) => {
+      const dataRegistro = getRecordDateKey(item.dataHoraRegistro);
+      const atendeInicio = !dataInicial || (dataRegistro && dataRegistro >= dataInicial);
+      const atendeFim = !dataFinal || (dataRegistro && dataRegistro <= dataFinal);
+      return atendeInicio && atendeFim;
+    });
+  }, [dataFinal, dataInicial, historicoParadas, intervaloInvalido]);
+
+  const resumoSupervisoes = useMemo(() => {
+    const agrupado = new Map();
+
+    paradasFiltradas.forEach((item) => {
+      const nome = String(item.supervisor || '').trim() || 'Nao informado';
+      const atual = agrupado.get(nome) || { nome, quantidade: 0, minutos: 0 };
+      atual.quantidade += 1;
+      atual.minutos += getDurationInMinutes(item);
+      agrupado.set(nome, atual);
+    });
+
+    return [...agrupado.values()].sort((first, second) => second.minutos - first.minutos);
+  }, [paradasFiltradas]);
+
+  const totalMinutos = resumoSupervisoes.reduce((total, item) => total + item.minutos, 0);
+  const maiorDuracao = resumoSupervisoes[0]?.minutos || 0;
+
+  return (
+    <main className="page-shell">
+      <Header title="Graficos de Horas de Parada por Supervisao" />
+
+      <div className="page-actions">
+        <LinkButton to="/">Voltar ao painel</LinkButton>
+      </div>
+
+      <section className="filter-bar date-filter-bar" aria-label="Filtro por periodo">
+        <div className="form-field">
+          <label htmlFor="grafico-data-inicial">Data inicial</label>
+          <input id="grafico-data-inicial" type="date" value={dataInicial} onChange={(event) => setDataInicial(event.target.value)} />
+        </div>
+        <div className="form-field">
+          <label htmlFor="grafico-data-final">Data final</label>
+          <input id="grafico-data-final" type="date" value={dataFinal} onChange={(event) => setDataFinal(event.target.value)} />
+        </div>
+      </section>
+
+      {intervaloInvalido && <div className="form-error">A data inicial deve ser anterior ou igual a data final.</div>}
+
+      <section className="summary-cards">
+        <article className="card">
+          <span>Horas totais de parada</span>
+          <strong>{formatMinutes(totalMinutos)}</strong>
+        </article>
+        <article className="card">
+          <span>Supervisoes no periodo</span>
+          <strong>{resumoSupervisoes.length}</strong>
+        </article>
+        <article className="card">
+          <span>Registros de parada</span>
+          <strong>{paradasFiltradas.length}</strong>
+        </article>
+      </section>
+
+      <section className="supervisor-chart" aria-labelledby="supervisor-chart-title">
+        <div className="supervisor-chart-heading">
+          <div>
+            <h2 id="supervisor-chart-title">Horas acumuladas por supervisao</h2>
+            <p>Duracao total e quantidade de registros em cada supervisao</p>
+          </div>
+          <span className="supervisor-chart-total">Total {formatMinutes(totalMinutos)}</span>
+        </div>
+
+        {resumoSupervisoes.length > 0 ? (
+          <div className="supervisor-chart-list">
+            {resumoSupervisoes.map((item) => (
+              <div className="supervisor-chart-row" key={item.nome}>
+                <span className="supervisor-chart-name">{item.nome}</span>
+                <div
+                  className="supervisor-chart-track"
+                  role="img"
+                  aria-label={`${item.nome}: ${formatMinutes(item.minutos)} em ${item.quantidade} paradas`}
+                >
+                  <div className="supervisor-chart-bar" style={{ width: `${maiorDuracao ? (item.minutos / maiorDuracao) * 100 : 0}%` }} />
+                </div>
+                <strong className="supervisor-chart-value">{formatMinutes(item.minutos)}</strong>
+                <span className="supervisor-chart-count">{item.quantidade} paradas</span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="empty-state">Nenhuma parada encontrada para o periodo informado.</div>
+        )}
+      </section>
+
+      <PageFooter />
+    </main>
+  );
+}
+
 export default function App() {
   const storageStatus = useMemo(() => getStorageStatus(), []);
   const [authLoading, setAuthLoading] = useState(storageStatus.authEnabled);
@@ -2474,6 +2602,7 @@ export default function App() {
         <Route path="/historico-opcoes" element={renderProtectedPage('historico-opcoes', <HistoricoOpcoesPage />)} />
         <Route path="/filtro-datas" element={renderProtectedPage('historico-datas', <HistoricoDatasPage />)} />
         <Route path="/dashboard-turnos" element={renderProtectedPage('dashboard-turnos', <DashboardTurnosPage />)} />
+        <Route path="/graficos-supervisao" element={renderProtectedPage('graficos-supervisao', <GraficosSupervisaoPage />)} />
         <Route path="/agente-ia" element={renderProtectedPage('agente-ia', <AgenteIAPage />)} />
         <Route path="/admin-acessos" element={<AdminAccessPage isAdmin={isAdmin} />} />
         <Route path="/admin-auditoria" element={<AdminAuditoriaPage isAdmin={isAdmin} />} />
