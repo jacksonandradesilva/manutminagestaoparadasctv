@@ -1165,24 +1165,33 @@ function DashboardPage({ pagePermissions }) {
   );
 }
 
-function toDateTimeLocalValue(value) {
-  if (!value) {
-    return '';
-  }
-
-  const directDate = new Date(value);
-  if (!Number.isNaN(directDate.getTime())) {
-    const pad = (number) => String(number).padStart(2, '0');
-    return `${directDate.getFullYear()}-${pad(directDate.getMonth() + 1)}-${pad(directDate.getDate())}T${pad(directDate.getHours())}:${pad(directDate.getMinutes())}`;
-  }
-
-  const match = value.match(/^(\d{2})\/(\d{2})\/(\d{4}),?\s*(\d{2}):(\d{2})(?::(\d{2}))?$/);
+function parseBrazilianDateTime(value) {
+  const match = String(value || '').trim().match(/^(\d{2})\/(\d{2})\/(\d{4}),?\s*(\d{2}):(\d{2})(?::(\d{2}))?$/);
   if (!match) {
-    return '';
+    return null;
   }
 
-  const [, day, month, year, hours, minutes] = match;
-  return `${year}-${month}-${day}T${hours}:${minutes}`;
+  const [, dayText, monthText, yearText, hoursText, minutesText, secondsText = '00'] = match;
+  const day = Number(dayText);
+  const month = Number(monthText);
+  const year = Number(yearText);
+  const hours = Number(hoursText);
+  const minutes = Number(minutesText);
+  const seconds = Number(secondsText);
+  const date = new Date(year, month - 1, day, hours, minutes, seconds);
+
+  if (
+    date.getFullYear() !== year ||
+    date.getMonth() !== month - 1 ||
+    date.getDate() !== day ||
+    date.getHours() !== hours ||
+    date.getMinutes() !== minutes ||
+    date.getSeconds() !== seconds
+  ) {
+    return null;
+  }
+
+  return date;
 }
 
 function HistoricoPage() {
@@ -1259,7 +1268,7 @@ function HistoricoPage() {
       supervisor: item.supervisor || '',
       horaInicio: item.horaInicio || '',
       horaFim: item.horaFim || '',
-      dataHoraRegistro: toDateTimeLocalValue(item.dataHoraRegistro || ''),
+      dataHoraRegistro: item.dataHoraRegistro || '',
       acao: ['corretiva', 'preventiva', 'preditiva', 'programada'].includes(item.acao) ? item.acao : 'corretiva'
     });
   }
@@ -1288,6 +1297,16 @@ function HistoricoPage() {
       return;
     }
 
+    const dataHoraRegistroInformada = editData.dataHoraRegistro.trim();
+    const dataHoraRegistroConvertida = dataHoraRegistroInformada
+      ? parseBrazilianDateTime(dataHoraRegistroInformada)
+      : null;
+
+    if (dataHoraRegistroInformada && !dataHoraRegistroConvertida) {
+      window.alert('Informe a data no formato dd/mm/aaaa, hh:mm:ss.');
+      return;
+    }
+
     const next = historicoParadas.map((item) => {
       if (item.idHistorico !== editId) {
         return item;
@@ -1299,7 +1318,9 @@ function HistoricoPage() {
         nome: editData.nome.trim(),
         causa: editData.causa.trim(),
         supervisor: editData.supervisor.trim(),
-        dataHoraRegistro: editData.dataHoraRegistro ? formatDateTime(new Date(editData.dataHoraRegistro)) : item.dataHoraRegistro
+        dataHoraRegistro: dataHoraRegistroConvertida
+          ? formatDateTime(dataHoraRegistroConvertida)
+          : item.dataHoraRegistro
       };
     });
 
@@ -1386,9 +1407,11 @@ function HistoricoPage() {
           <div className="form-field">
             <label>Data do Registro</label>
             <input
-              type="datetime-local"
+              type="text"
               value={editData.dataHoraRegistro}
               onChange={(event) => setEditData({ ...editData, dataHoraRegistro: event.target.value })}
+              placeholder="dd/mm/aaaa, hh:mm:ss"
+              maxLength={20}
             />
           </div>
           <div className="form-field">
