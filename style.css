@@ -249,6 +249,85 @@ h2 {
 	margin-top: 20px;
 }
 
+.supervisor-chart {
+	margin: 24px 0;
+	padding: 24px;
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	background: var(--surface);
+}
+
+.supervisor-chart-heading {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 16px;
+	margin-bottom: 24px;
+}
+
+.supervisor-chart-heading h2 {
+	margin-bottom: 4px;
+}
+
+.supervisor-chart-heading p {
+	margin: 0;
+	color: var(--text-secondary);
+	font-size: 14px;
+}
+
+.supervisor-chart-total {
+	flex-shrink: 0;
+	padding: 6px 10px;
+	border-radius: 4px;
+	background: var(--primary-ultra-light);
+	color: var(--primary-dark);
+	font-size: 14px;
+	font-weight: 700;
+}
+
+.supervisor-chart-list {
+	display: grid;
+	gap: 18px;
+}
+
+.supervisor-chart-row {
+	display: grid;
+	grid-template-columns: minmax(120px, 190px) minmax(80px, 1fr) 72px 100px;
+	align-items: center;
+	gap: 14px;
+}
+
+.supervisor-chart-name {
+	font-weight: 600;
+	overflow-wrap: anywhere;
+}
+
+.supervisor-chart-track {
+	height: 18px;
+	background: var(--background-alt);
+	border-radius: 3px;
+	overflow: hidden;
+}
+
+.supervisor-chart-bar {
+	height: 100%;
+	min-width: 2px;
+	background: linear-gradient(90deg, var(--primary) 0%, var(--primary-light) 100%);
+	border-radius: inherit;
+	transition: width 0.35s ease;
+}
+
+.supervisor-chart-value {
+	font-variant-numeric: tabular-nums;
+	text-align: right;
+}
+
+.supervisor-chart-count {
+	color: var(--text-secondary);
+	font-size: 13px;
+	text-align: right;
+}
+
 .turno-tabs {
 	display: flex;
 	flex-wrap: wrap;
@@ -781,6 +860,38 @@ tbody tr:nth-child(even):hover {
 
 	.summary-cards {
 		gap: 12px;
+	}
+
+	.supervisor-chart {
+		padding: 18px;
+	}
+
+	.supervisor-chart-row {
+		grid-template-columns: minmax(0, 1fr) auto;
+		gap: 8px 12px;
+	}
+
+	.supervisor-chart-name {
+		grid-column: 1;
+	}
+
+	.supervisor-chart-track {
+		grid-column: 1 / -1;
+		grid-row: 2;
+	}
+
+	.supervisor-chart-value {
+		grid-column: 2;
+		grid-row: 1;
+	}
+
+	.supervisor-chart-count {
+		grid-column: 2;
+		grid-row: 3;
+	}
+
+	.supervisor-chart-heading {
+		flex-direction: column;
 	}
 
 	.ai-agent-suggestions {
