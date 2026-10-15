@@ -35,6 +35,8 @@ const TURNOS = ['A', 'B', 'C', 'D'];
 const PAGE_ACCESS_OPTIONS = [
   { key: 'dashboard', label: 'Painel principal', path: '/' },
   { key: 'historico', label: 'Gestao de parada', path: '/historico' },
+  { key: 'historico-editar', label: 'Editar registros da gestao de parada', path: '/historico' },
+  { key: 'historico-excluir', label: 'Excluir registros da gestao de parada', path: '/historico' },
   { key: 'relatorio-turnos', label: 'Relatorio por turno', path: '/relatorio-turnos' },
   { key: 'historico-opcoes', label: 'Historico por opcao', path: '/historico-opcoes' },
   { key: 'historico-datas', label: 'Filtro por data', path: '/filtro-datas' },
@@ -1196,7 +1198,7 @@ function parseBrazilianDateTime(value) {
   return date;
 }
 
-function HistoricoPage() {
+function HistoricoPage({ pagePermissions }) {
   const [historicoParadas, setHistoricoParadas] = useState([]);
   const [observacoes, setObservacoes] = useState('');
   const [editId, setEditId] = useState(null);
@@ -1260,6 +1262,10 @@ function HistoricoPage() {
   }
 
   function abrirEdicao(item) {
+    if (!pagePermissions['historico-editar']) {
+      return;
+    }
+
     setEditId(item.idHistorico);
     setEditData({
       nome: item.nome || '',
@@ -1287,6 +1293,10 @@ function HistoricoPage() {
   }
 
   async function excluirItem(id) {
+    if (!pagePermissions['historico-excluir']) {
+      return;
+    }
+
     const next = historicoParadas.filter((item) => item.idHistorico !== id);
     setHistoricoParadas(next);
     await saveHistoricoParadas(next);
@@ -1339,7 +1349,7 @@ function HistoricoPage() {
         <LinkButton to="/">Voltar ao painel</LinkButton>
       </div>
 
-      {editId !== null && (
+      {editId !== null && pagePermissions['historico-editar'] && (
         <form onSubmit={salvarEdicao}>
           <div className="form-field">
             <label>Painel</label>
@@ -1482,8 +1492,12 @@ function HistoricoPage() {
               <td data-label="Registro">{item.dataHoraRegistro || '-'}</td>
               <td data-label="Acoes">
                 <div className="acoes-inline">
-                  <button className="btn editar" type="button" onClick={() => abrirEdicao(item)}>Editar</button>
-                  <button className="btn excluir" type="button" onClick={() => excluirItem(item.idHistorico)}>Excluir</button>
+                  {pagePermissions['historico-editar'] && (
+                    <button className="btn editar" type="button" onClick={() => abrirEdicao(item)}>Editar</button>
+                  )}
+                  {pagePermissions['historico-excluir'] && (
+                    <button className="btn excluir" type="button" onClick={() => excluirItem(item.idHistorico)}>Excluir</button>
+                  )}
                 </div>
               </td>
             </tr>
@@ -2597,7 +2611,7 @@ export default function App() {
       <SessionBar email={session?.user?.email} isAdmin={isAdmin} onSignOut={handleSignOut} />
       <Routes>
         <Route path="/" element={renderProtectedPage('dashboard', <DashboardPage pagePermissions={pagePermissions} />)} />
-        <Route path="/historico" element={renderProtectedPage('historico', <HistoricoPage />)} />
+        <Route path="/historico" element={renderProtectedPage('historico', <HistoricoPage pagePermissions={pagePermissions} />)} />
         <Route path="/relatorio-turnos" element={renderProtectedPage('relatorio-turnos', <RelatorioPorTurnoPage />)} />
         <Route path="/historico-opcoes" element={renderProtectedPage('historico-opcoes', <HistoricoOpcoesPage />)} />
         <Route path="/filtro-datas" element={renderProtectedPage('historico-datas', <HistoricoDatasPage />)} />
