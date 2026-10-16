@@ -74,11 +74,6 @@
     </form>
 
     <section class="summary-cards" id="resumoHistorico">
-      <article class="card observacoes-card">
-        <span>Observacoes</span>
-        <textarea id="observacoesHistorico" rows="4" placeholder="Digite observacoes da gestao de parada da manutencao..."></textarea>
-        <button type="button" id="salvarObservacoesHistorico">Salvar observacoes</button>
-      </article>
       <article class="card">
         <span>Tempo total de parada</span>
         <strong id="totalHorasParadas">00:00</strong>
@@ -108,12 +103,9 @@
 
   <script src="app-api.js"></script>
   <script>
-    const HISTORICO_OBSERVACOES_KEY = 'mina_historico_observacoes_v1';
     const historicoTabela = document.querySelector('#historicoTabela tbody');
     const historicoVazio = document.getElementById('historicoVazio');
     const limparHistorico = document.getElementById('limparHistorico');
-    const observacoesHistorico = document.getElementById('observacoesHistorico');
-    const salvarObservacoesHistorico = document.getElementById('salvarObservacoesHistorico');
     const totalHorasParadas = document.getElementById('totalHorasParadas');
     const editarHistoricoForm = document.getElementById('editarHistoricoForm');
     const editarNome = document.getElementById('editarNome');
@@ -168,23 +160,6 @@
     function renderResumo(items) {
       const accumulatedMinutes = items.reduce((total, item) => total + getDurationInMinutes(item), 0);
       totalHorasParadas.textContent = formatMinutes(accumulatedMinutes);
-    }
-
-    function carregarObservacoesHistorico() {
-      try {
-        observacoesHistorico.value = window.localStorage.getItem(HISTORICO_OBSERVACOES_KEY) || '';
-      } catch (erro) {
-        observacoesHistorico.value = '';
-      }
-    }
-
-    function salvarObservacoes() {
-      try {
-        window.localStorage.setItem(HISTORICO_OBSERVACOES_KEY, observacoesHistorico.value);
-        alert('Observacoes salvas com sucesso.');
-      } catch (erro) {
-        alert('Nao foi possivel salvar as observacoes.');
-      }
     }
 
     function fillCell(row, label, value) {
@@ -310,8 +285,6 @@
       limparFormularioEdicao();
     });
 
-    salvarObservacoesHistorico.addEventListener('click', salvarObservacoes);
-
     editarHistoricoForm.addEventListener('submit', async (event) => {
       event.preventDefault();
 
@@ -343,7 +316,6 @@
     });
 
     carregarHistorico();
-    carregarObservacoesHistorico();
   </script>
 </body>
 </html>
