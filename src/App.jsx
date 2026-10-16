@@ -30,7 +30,6 @@ import {
 // Importações de componentes de página
 import { formatDateTime, formatMinutes, getDurationInMinutes } from './utils';
 // Importações de estilos
-const HISTORICO_OBSERVACOES_KEY = 'mina_historico_observacoes_v1';
 const TURNOS = ['A', 'B', 'C', 'D'];
 const PAGE_ACCESS_OPTIONS = [
   { key: 'dashboard', label: 'Painel principal', path: '/' },
@@ -1200,7 +1199,6 @@ function parseBrazilianDateTime(value) {
 
 function HistoricoPage({ pagePermissions }) {
   const [historicoParadas, setHistoricoParadas] = useState([]);
-  const [observacoes, setObservacoes] = useState('');
   const [editId, setEditId] = useState(null);
   const [editData, setEditData] = useState({
     nome: '',
@@ -1220,6 +1218,22 @@ function HistoricoPage({ pagePermissions }) {
     return formatMinutes(accumulated);
   }, [historicoParadas]);
 
+  const resumoSupervisoes = useMemo(() => {
+    const agrupado = new Map();
+
+    historicoParadas.forEach((item) => {
+      const nome = String(item.supervisor || '').trim() || 'Nao informado';
+      const atual = agrupado.get(nome) || { nome, quantidade: 0, minutos: 0 };
+      atual.quantidade += 1;
+      atual.minutos += getDurationInMinutes(item);
+      agrupado.set(nome, atual);
+    });
+
+    return [...agrupado.values()].sort((first, second) => second.minutos - first.minutos);
+  }, [historicoParadas]);
+
+  const maiorDuracaoSupervisao = resumoSupervisoes[0]?.minutos || 0;
+
   useEffect(() => {
     let active = true;
 
@@ -1233,12 +1247,6 @@ function HistoricoPage({ pagePermissions }) {
     }
 
     loadHistorico();
-
-    try {
-      setObservacoes(window.localStorage.getItem(HISTORICO_OBSERVACOES_KEY) || '');
-    } catch {
-      setObservacoes('');
-    }
 
     return () => {
       active = false;
@@ -1279,11 +1287,6 @@ function HistoricoPage({ pagePermissions }) {
       dataHoraRegistro: item.dataHoraRegistro || '',
       acao: ['corretiva', 'preventiva', 'preditiva', 'programada'].includes(item.acao) ? item.acao : 'corretiva'
     });
-  }
-
-  function salvarObservacoes() {
-    window.localStorage.setItem(HISTORICO_OBSERVACOES_KEY, observacoes);
-    window.alert('Observacoes salvas com sucesso.');
   }
 
   async function limparHistorico() {
@@ -1443,19 +1446,39 @@ function HistoricoPage({ pagePermissions }) {
       )}
 
       <section className="summary-cards">
-        <article className="card observacoes-card">
-          <span>Observacoes</span>
-          <textarea
-            rows="4"
-            placeholder="Digite observacoes da gestao de parada da manutencao..."
-            value={observacoes}
-            onChange={(event) => setObservacoes(event.target.value)}
-          />
-          <button type="button" onClick={salvarObservacoes}>Salvar observacoes</button>
-        </article>
         <article className="card">
           <span>Tempo total de parada</span>
           <strong>{totalHorasParadas}</strong>
+        </article>
+        <article className="card supervisor-summary-card" aria-labelledby="historico-chart-title">
+          <div className="supervisor-chart-heading">
+            <div>
+              <h2 id="historico-chart-title">Paradas por supervisao</h2>
+              <p>Duracao acumulada e quantidade de registros</p>
+            </div>
+            <span className="supervisor-chart-total">Total {totalHorasParadas}</span>
+          </div>
+
+          {resumoSupervisoes.length > 0 ? (
+            <div className="supervisor-chart-list">
+              {resumoSupervisoes.map((item) => (
+                <div className="supervisor-chart-row" key={item.nome}>
+                  <span className="supervisor-chart-name">{item.nome}</span>
+                  <div
+                    className="supervisor-chart-track"
+                    role="img"
+                    aria-label={`${item.nome}: ${formatMinutes(item.minutos)} em ${item.quantidade} paradas`}
+                  >
+                    <div className="supervisor-chart-bar" style={{ width: `${maiorDuracaoSupervisao ? (item.minutos / maiorDuracaoSupervisao) * 100 : 0}%` }} />
+                  </div>
+                  <strong className="supervisor-chart-value">{formatMinutes(item.minutos)}</strong>
+                  <span className="supervisor-chart-count">{item.quantidade} paradas</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="empty-state">Nenhuma parada registrada para exibir.</div>
+          )}
         </article>
       </section>
 
