@@ -1,5 +1,5 @@
 // Componente principal da aplicação
-import { useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 // Importações do React Router
 import { NavLink, Route, Routes } from 'react-router-dom';
 // Importações de componentes e funções auxiliares
@@ -30,6 +30,7 @@ import {
 // Importações de componentes de página
 import { formatDateTime, formatMinutes, getDurationInMinutes } from './utils';
 // Importações de estilos
+const DowntimeTimelineChart = lazy(() => import('./DowntimeTimelineChart'));
 const TURNOS = ['A', 'B', 'C', 'D'];
 const PAGE_ACCESS_OPTIONS = [
   { key: 'dashboard', label: 'Painel principal', path: '/' },
@@ -2491,6 +2492,29 @@ function GraficosSupervisaoPage() {
     return [...agrupado.values()].sort((first, second) => second.minutos - first.minutos);
   }, [paradasFiltradas]);
 
+  const resumoPorData = useMemo(() => {
+    const agrupado = new Map();
+
+    paradasFiltradas.forEach((item) => {
+      const data = getRecordDateKey(item.dataHoraRegistro);
+      if (!data) {
+        return;
+      }
+
+      const atual = agrupado.get(data) || { data, minutos: 0, quantidade: 0, horarios: [] };
+      atual.minutos += getDurationInMinutes(item);
+      atual.quantidade += 1;
+      atual.horarios.push({
+        inicio: item.horaInicio || '--:--',
+        fim: item.horaFim || '--:--',
+        equipamento: String(item.tagEquipamento || item.nome || '').trim()
+      });
+      agrupado.set(data, atual);
+    });
+
+    return [...agrupado.values()].sort((first, second) => first.data.localeCompare(second.data));
+  }, [paradasFiltradas]);
+
   const totalMinutos = resumoSupervisoes.reduce((total, item) => total + item.minutos, 0);
   const maiorDuracao = resumoSupervisoes[0]?.minutos || 0;
   const maiorDuracaoEquipamento = resumoEquipamentos[0]?.minutos || 0;
@@ -2533,6 +2557,23 @@ function GraficosSupervisaoPage() {
           <span>Registros de parada</span>
           <strong>{paradasFiltradas.length}</strong>
         </article>
+      </section>
+
+      <section className="supervisor-chart" aria-labelledby="downtime-timeline-title">
+        <div className="supervisor-chart-heading">
+          <div>
+            <h2 id="downtime-timeline-title">Linha do tempo das paradas</h2>
+            <p>Duracao acumulada por data de registro</p>
+          </div>
+        </div>
+
+        {resumoPorData.length > 0 ? (
+          <Suspense fallback={<div className="empty-state">Carregando grafico...</div>}>
+            <DowntimeTimelineChart data={resumoPorData} />
+          </Suspense>
+        ) : (
+          <div className="empty-state">Nenhuma parada com data valida para exibir no periodo.</div>
+        )}
       </section>
 
       <section className="supervisor-chart" aria-labelledby="supervisor-chart-title">
