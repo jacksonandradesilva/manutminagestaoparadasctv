@@ -290,6 +290,38 @@ h2 {
 	gap: 18px;
 }
 
+.downtime-timeline-chart {
+	width: 100%;
+	height: 320px;
+}
+
+.downtime-timeline-tooltip {
+	max-width: 340px;
+	padding: 12px;
+	border: 1px solid var(--border);
+	border-radius: 4px;
+	background: var(--surface);
+	box-shadow: var(--shadow-md);
+	color: var(--text-primary);
+	font-size: 13px;
+}
+
+.downtime-timeline-tooltip strong,
+.downtime-timeline-tooltip span {
+	display: block;
+}
+
+.downtime-timeline-tooltip ul {
+	max-height: 180px;
+	margin: 8px 0 0;
+	padding-left: 18px;
+	overflow-y: auto;
+}
+
+.downtime-timeline-tooltip li + li {
+	margin-top: 4px;
+}
+
 .supervisor-chart-row {
 	display: grid;
 	grid-template-columns: minmax(120px, 190px) minmax(80px, 1fr) 72px 100px;
