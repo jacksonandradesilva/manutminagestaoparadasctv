@@ -1,5 +1,5 @@
 // Componente principal da aplicação
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 // Importações do React Router
 import { NavLink, Route, Routes } from 'react-router-dom';
 // Importações de componentes e funções auxiliares
@@ -1252,6 +1252,7 @@ function parseBrazilianDateTime(value) {
 function HistoricoPage({ pagePermissions }) {
   const [historicoParadas, setHistoricoParadas] = useState([]);
   const [editId, setEditId] = useState(null);
+  const editFormRef = useRef(null);
   const [editData, setEditData] = useState({
     nome: '',
     tagEquipamento: '',
@@ -1286,6 +1287,12 @@ function HistoricoPage({ pagePermissions }) {
   }, [historicoParadas]);
 
   const maiorDuracaoSupervisao = resumoSupervisoes[0]?.minutos || 0;
+
+  useEffect(() => {
+    if (editId !== null) {
+      editFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [editId]);
 
   useEffect(() => {
     let active = true;
@@ -1408,10 +1415,11 @@ function HistoricoPage({ pagePermissions }) {
       </div>
 
       {editId !== null && pagePermissions['historico-editar'] && (
-        <form onSubmit={salvarEdicao}>
+        <form ref={editFormRef} onSubmit={salvarEdicao}>
           <div className="form-field">
             <label>Painel</label>
             <input
+              autoFocus
               value={editData.nome}
               onChange={(event) => setEditData({ ...editData, nome: event.target.value })}
               required
