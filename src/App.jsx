@@ -31,6 +31,7 @@ import {
 import { formatDateTime, formatMinutes, getDurationInMinutes } from './utils';
 // Importações de estilos
 const DowntimeTimelineChart = lazy(() => import('./DowntimeTimelineChart'));
+const MaintenanceMetricsDashboard = lazy(() => import('./MaintenanceMetricsDashboard'));
 const TURNOS = ['A', 'B', 'C', 'D'];
 const PAGE_ACCESS_OPTIONS = [
   { key: 'dashboard', label: 'Painel principal', path: '/' },
@@ -1048,6 +1049,7 @@ function DashboardPage({ pagePermissions }) {
 
       <div className="top-actions">
         {pagePermissions.historico && <LinkButton to="/historico">Ver Gestao de Parada da Manutencao</LinkButton>}
+        {pagePermissions.historico && <LinkButton to="/indicadores-manutencao">Indicadores MTTR / MTBF</LinkButton>}
         {pagePermissions['relatorio-turnos'] && <LinkButton to="/relatorio-turnos">Relatorio por Turno</LinkButton>}
         {pagePermissions['historico-opcoes'] && <LinkButton to="/historico-opcoes">Historico por Opcao</LinkButton>}
         {pagePermissions['historico-datas'] && <LinkButton to="/filtro-datas">Paradas por Equipamento</LinkButton>}
@@ -1412,6 +1414,7 @@ function HistoricoPage({ pagePermissions }) {
 
       <div className="page-actions">
         <LinkButton to="/">Voltar ao painel</LinkButton>
+        <LinkButton to="/indicadores-manutencao">Indicadores MTTR / MTBF</LinkButton>
       </div>
 
       {editId !== null && pagePermissions['historico-editar'] && (
@@ -2826,6 +2829,14 @@ export default function App() {
       <Routes>
         <Route path="/" element={renderProtectedPage('dashboard', <DashboardPage pagePermissions={pagePermissions} />)} />
         <Route path="/historico" element={renderProtectedPage('historico', <HistoricoPage pagePermissions={pagePermissions} />)} />
+        <Route
+          path="/indicadores-manutencao"
+          element={renderProtectedPage('historico', (
+            <Suspense fallback={<main className="page-shell"><p>Carregando indicadores...</p></main>}>
+              <MaintenanceMetricsDashboard />
+            </Suspense>
+          ))}
+        />
         <Route path="/relatorio-turnos" element={renderProtectedPage('relatorio-turnos', <RelatorioPorTurnoPage />)} />
         <Route path="/historico-opcoes" element={renderProtectedPage('historico-opcoes', <HistoricoOpcoesPage />)} />
         <Route path="/filtro-datas" element={renderProtectedPage('historico-datas', <HistoricoDatasPage />)} />
