@@ -1313,6 +1313,134 @@ table,
 	padding: 32px;
 }
 
+.maintenance-dashboard-subtitle {
+	margin: -18px 0 0;
+	color: var(--text-secondary);
+	font-size: 14px;
+}
+
+.maintenance-dashboard-filters {
+	align-items: flex-end;
+}
+
+.maintenance-dashboard-filters .form-field {
+	min-width: 200px;
+}
+
+.maintenance-filter-clear {
+	min-height: 44px;
+}
+
+.maintenance-metric-cards {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+	gap: 16px;
+	margin: 22px 0;
+}
+
+.maintenance-metric-card {
+	display: flex;
+	min-height: 142px;
+	flex-direction: column;
+	justify-content: center;
+	gap: 4px;
+	padding: 20px;
+	border: 1px solid var(--border);
+	border-left: 5px solid var(--accent);
+	border-radius: 8px;
+	background: var(--surface);
+	box-shadow: var(--shadow-sm);
+}
+
+.maintenance-metric-card > span {
+	color: var(--text-secondary);
+	font-size: 13px;
+	font-weight: 700;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+}
+
+.maintenance-metric-card > strong {
+	color: var(--text-primary);
+	font-size: clamp(24px, 3vw, 32px);
+	font-variant-numeric: tabular-nums;
+	line-height: 1.2;
+}
+
+.maintenance-metric-card > small {
+	color: var(--text-tertiary);
+	font-size: 13px;
+}
+
+.maintenance-metric-primary {
+	border-left-color: var(--primary);
+}
+
+.maintenance-metric-primary > strong {
+	color: var(--primary);
+}
+
+.maintenance-metric-blue {
+	border-left-color: var(--info);
+}
+
+.maintenance-metric-blue > strong {
+	color: var(--info-dark);
+}
+
+.maintenance-chart-panel,
+.maintenance-table-panel {
+	margin: 24px 0;
+	padding: 24px;
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	background: var(--surface);
+}
+
+.maintenance-chart {
+	width: 100%;
+	height: 300px;
+}
+
+.maintenance-table-scroll {
+	overflow-x: auto;
+}
+
+.maintenance-table-scroll table {
+	min-width: 620px;
+}
+
+.maintenance-metric-note {
+	padding: 14px 16px;
+	border-left: 4px solid var(--info);
+	background: var(--info-bg);
+	color: var(--text-secondary);
+	font-size: 13px;
+}
+
+@media (max-width: 768px) {
+	.maintenance-dashboard-subtitle {
+		margin-top: -18px;
+	}
+
+	.maintenance-dashboard-filters .form-field {
+		min-width: 100%;
+	}
+
+	.maintenance-filter-clear {
+		width: 100%;
+	}
+
+	.maintenance-chart-panel,
+	.maintenance-table-panel {
+		padding: 16px;
+	}
+
+	.maintenance-chart {
+		height: 240px;
+	}
+}
+
 .page-header,
 .session-bar {
 	background: linear-gradient(90deg, var(--secondary-lighter) 0%, var(--secondary) 100%);
