@@ -85,6 +85,7 @@ export default function MaintenanceMetricsDashboard() {
   const [dataInicial, setDataInicial] = useState('');
   const [dataFinal, setDataFinal] = useState('');
   const [tagFiltro, setTagFiltro] = useState('');
+  const [supervisorFiltro, setSupervisorFiltro] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -146,6 +147,14 @@ export default function MaintenanceMetricsDashboard() {
       .sort();
   }, [historicoParadas]);
 
+  const supervisores = useMemo(() => {
+    return [...new Set(
+      historicoParadas
+        .map((item) => String(item?.supervisor || '').trim())
+        .filter(Boolean)
+    )].sort((first, second) => first.localeCompare(second, 'pt-BR'));
+  }, [historicoParadas]);
+
   const periodoInicial = dataInicial || datasDisponiveis[0] || '';
   const periodoFinal = dataFinal || datasDisponiveis[datasDisponiveis.length - 1] || '';
   const intervaloInvalido = Boolean(dataInicial && dataFinal && dataInicial > dataFinal);
@@ -165,14 +174,26 @@ export default function MaintenanceMetricsDashboard() {
       const atendeInicio = !dataInicial || (dataRegistro && dataRegistro >= dataInicial);
       const atendeFim = !dataFinal || (dataRegistro && dataRegistro <= dataFinal);
       const asset = getAsset(item, 0);
-      return atendeInicio && atendeFim && (!tagFiltro || asset.key === tagFiltro);
+      const atendeSupervisor = !supervisorFiltro || String(item?.supervisor || '').trim() === supervisorFiltro;
+      return atendeInicio && atendeFim && atendeSupervisor && (!tagFiltro || asset.key === tagFiltro);
     });
-  }, [dataFinal, dataInicial, historicoParadas, intervaloInvalido, tagFiltro]);
+  }, [dataFinal, dataInicial, historicoParadas, intervaloInvalido, supervisorFiltro, tagFiltro]);
 
   const resumo = useMemo(() => {
-    const ativosConsiderados = tagFiltro
-      ? ativos.filter((asset) => asset.key === tagFiltro)
-      : ativos;
+    const chavesAtivosDaSupervisao = supervisorFiltro
+      ? new Set([
+        ...equipamentos
+          .filter((item) => String(item?.supervisor || '').trim() === supervisorFiltro)
+          .map((item, index) => getAsset(item, index).key),
+        ...historicoParadas
+          .filter((item) => String(item?.supervisor || '').trim() === supervisorFiltro)
+          .map((item, index) => getAsset(item, index).key)
+      ])
+      : null;
+    const ativosConsiderados = ativos.filter((asset) =>
+      (!tagFiltro || asset.key === tagFiltro) &&
+      (!chavesAtivosDaSupervisao || chavesAtivosDaSupervisao.has(asset.key))
+    );
     const paradasComDuracao = paradasFiltradas.filter((item) => getRecordedDowntime(item) > 0).length;
     const minutosParados = paradasFiltradas.reduce((total, item) => total + getRecordedDowntime(item), 0);
     const dias = getPeriodDays(periodoInicial, periodoFinal);
@@ -192,7 +213,7 @@ export default function MaintenanceMetricsDashboard() {
       dias,
       horasOperacionais
     };
-  }, [ativos, paradasFiltradas, periodoFinal, periodoInicial, tagFiltro]);
+  }, [ativos, equipamentos, historicoParadas, paradasFiltradas, periodoFinal, periodoInicial, supervisorFiltro, tagFiltro]);
 
   const paradasPorAtivo = useMemo(() => {
     const grouped = new Map(resumo.ativosConsiderados.map((asset) => [
@@ -255,6 +276,7 @@ export default function MaintenanceMetricsDashboard() {
     setDataInicial('');
     setDataFinal('');
     setTagFiltro('');
+    setSupervisorFiltro('');
   }
 
   return (
@@ -300,6 +322,19 @@ export default function MaintenanceMetricsDashboard() {
             <option value="">Todos os equipamentos</option>
             {ativos.map((asset) => (
               <option key={asset.key} value={asset.key}>{asset.label}</option>
+            ))}
+          </select>
+        </div>
+        <div className="form-field">
+          <label htmlFor="maintenance-supervisor">Supervisao</label>
+          <select
+            id="maintenance-supervisor"
+            value={supervisorFiltro}
+            onChange={(event) => setSupervisorFiltro(event.target.value)}
+          >
+            <option value="">Todas as supervisoes</option>
+            {supervisores.map((supervisor) => (
+              <option key={supervisor} value={supervisor}>{supervisor}</option>
             ))}
           </select>
         </div>
@@ -413,4 +448,3 @@ export default function MaintenanceMetricsDashboard() {
     </main>
   );
 }
-
