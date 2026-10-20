@@ -12,7 +12,7 @@ Este projeto foi desenvolvido em React + Vite e permite:
 - visualizar indicadores em dashboard;
 - acompanhar MTTR, MTBF e horas de parada por periodo e equipamento;
 - usar uma funcionalidade de IA simples para responder perguntas sobre os dados;
-- controlar acesso por autenticação com Supabase e liberação de usuários por administrador.
+- controlar acesso por autenticação com Supabase e liberação de usuários por administrador, incluindo permissões independentes para editar e excluir registros do status da mina e para acessar os indicadores MTTR / MTBF.
 
 ## Tecnologias
 
