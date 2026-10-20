@@ -29,6 +29,49 @@ Agora ele tambem tera acesso a pagina `Liberacao de Acessos`, onde pode:
 - Ver quem se cadastrou.
 - Liberar usuarios pendentes.
 - Voltar um usuario para pendente para bloquear o acesso as paginas.
+- Escolher separadamente o acesso ao `Status - Mina Manutencao` e aos `Indicadores MTTR / MTBF`.
+- Liberar separadamente a edicao e a exclusao de registros do `Status - Mina Manutencao`.
+
+### Migrar permissoes de edicao e exclusao do status da mina
+Para manter as permissoes de edicao e exclusao dos usuarios aprovados que ja tinham acesso ao status da mina, execute uma vez:
+
+```sql
+update public.user_access
+set
+  allowed_pages = allowed_pages
+    || case
+      when not allowed_pages @> '["status-mina-editar"]'::jsonb
+      then '["status-mina-editar"]'::jsonb
+      else '[]'::jsonb
+    end
+    || case
+      when not allowed_pages @> '["status-mina-excluir"]'::jsonb
+      then '["status-mina-excluir"]'::jsonb
+      else '[]'::jsonb
+    end,
+  updated_at = now()
+where status = 'approved'
+  and jsonb_typeof(allowed_pages) = 'array'
+  and allowed_pages @> '["dashboard"]'::jsonb
+  and (
+    not allowed_pages @> '["status-mina-editar"]'::jsonb
+    or not allowed_pages @> '["status-mina-excluir"]'::jsonb
+  );
+```
+
+### Migrar acesso aos indicadores ja liberados
+Ao separar a permissao dos indicadores da permissao de `Gestao de parada`, execute uma vez o SQL abaixo para manter o acesso dos usuarios aprovados que ja tinham a pagina de historico liberada. Depois da migracao, o administrador pode alterar essa permissao individualmente pela tela `Liberacao de Acessos`.
+
+```sql
+update public.user_access
+set
+  allowed_pages = allowed_pages || '["indicadores-manutencao"]'::jsonb,
+  updated_at = now()
+where status = 'approved'
+  and jsonb_typeof(allowed_pages) = 'array'
+  and allowed_pages @> '["historico"]'::jsonb
+  and not allowed_pages @> '["indicadores-manutencao"]'::jsonb;
+```
 
 ### Atualizacao para quem ja tinha banco criado
 Se sua tabela `app_state` ja existia antes, execute tambem este SQL:
