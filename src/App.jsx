@@ -34,7 +34,9 @@ const DowntimeTimelineChart = lazy(() => import('./DowntimeTimelineChart'));
 const MaintenanceMetricsDashboard = lazy(() => import('./MaintenanceMetricsDashboard'));
 const TURNOS = ['A', 'B', 'C', 'D'];
 const PAGE_ACCESS_OPTIONS = [
-  { key: 'dashboard', label: 'Painel principal', path: '/' },
+  { key: 'dashboard', label: 'Status - Mina Manutencao', path: '/' },
+  { key: 'status-mina-editar', label: 'Editar registros do Status - Mina Manutencao', path: '/' },
+  { key: 'status-mina-excluir', label: 'Excluir registros do Status - Mina Manutencao', path: '/' },
   { key: 'historico', label: 'Gestao de parada', path: '/historico' },
   { key: 'historico-editar', label: 'Editar registros da gestao de parada', path: '/historico' },
   { key: 'historico-excluir', label: 'Excluir registros da gestao de parada', path: '/historico' },
@@ -43,6 +45,7 @@ const PAGE_ACCESS_OPTIONS = [
   { key: 'historico-datas', label: 'Paradas por equipamento e periodo', path: '/filtro-datas' },
   { key: 'dashboard-turnos', label: 'Dashboard por turno', path: '/dashboard-turnos' },
   { key: 'graficos-supervisao', label: 'Graficos por supervisao', path: '/graficos-supervisao' },
+  { key: 'indicadores-manutencao', label: 'Indicadores MTTR / MTBF', path: '/indicadores-manutencao' },
   { key: 'agente-ia', label: 'Agente IA', path: '/agente-ia' }
 ];
 
@@ -970,6 +973,10 @@ function DashboardPage({ pagePermissions }) {
   async function handleSubmit(event) {
     event.preventDefault();
 
+    if (editandoIndex !== null && !pagePermissions['status-mina-editar']) {
+      return;
+    }
+
     if (!formData.nome || !formData.status || !formData.turno || !formData.turma) {
       return;
     }
@@ -1010,6 +1017,10 @@ function DashboardPage({ pagePermissions }) {
   }
 
   function editarEquipamento(index) {
+    if (!pagePermissions['status-mina-editar']) {
+      return;
+    }
+
     const equip = equipamentos[index];
     if (!equip) {
       return;
@@ -1030,12 +1041,20 @@ function DashboardPage({ pagePermissions }) {
   }
 
   async function excluirEquipamento(index) {
+    if (!pagePermissions['status-mina-excluir']) {
+      return;
+    }
+
     const nextEquipamentos = equipamentos.filter((_, currentIndex) => currentIndex !== index);
     setEquipamentos(nextEquipamentos);
     await persist(nextEquipamentos, historicoParadas);
   }
 
   async function limparStatusParado() {
+    if (!pagePermissions['status-mina-excluir']) {
+      return;
+    }
+
     if (confirm('Tem certeza que deseja remover todos os itens com status "Parado"?')) {
       const nextEquipamentos = equipamentos.filter((equip) => equip.status !== 'parado');
       setEquipamentos(nextEquipamentos);
@@ -1049,14 +1068,14 @@ function DashboardPage({ pagePermissions }) {
 
       <div className="top-actions">
         {pagePermissions.historico && <LinkButton to="/historico">Ver Gestao de Parada da Manutencao</LinkButton>}
-        {pagePermissions.historico && <LinkButton to="/indicadores-manutencao">Indicadores MTTR / MTBF</LinkButton>}
+        {pagePermissions['indicadores-manutencao'] && <LinkButton to="/indicadores-manutencao">Indicadores MTTR / MTBF</LinkButton>}
         {pagePermissions['relatorio-turnos'] && <LinkButton to="/relatorio-turnos">Relatorio por Turno</LinkButton>}
         {pagePermissions['historico-opcoes'] && <LinkButton to="/historico-opcoes">Historico por Opcao</LinkButton>}
         {pagePermissions['historico-datas'] && <LinkButton to="/filtro-datas">Paradas por Equipamento</LinkButton>}
         {pagePermissions['dashboard-turnos'] && <LinkButton to="/dashboard-turnos">Dashboard por Turno</LinkButton>}
         {pagePermissions['graficos-supervisao'] && <LinkButton to="/graficos-supervisao">Graficos por Supervisao</LinkButton>}
         {pagePermissions['agente-ia'] && <LinkButton to="/agente-ia">Agente IA</LinkButton>}
-        {equipamentos.some((e) => e.status === 'parado') && (
+        {pagePermissions['status-mina-excluir'] && equipamentos.some((e) => e.status === 'parado') && (
           <button type="button" className="btn excluir" onClick={limparStatusParado}>Limpar Status Parado</button>
         )}
       </div>
@@ -1190,7 +1209,7 @@ function DashboardPage({ pagePermissions }) {
             <th>Horario Inicio</th>
             <th>Horario Fim</th>
             <th>Data e Hora Cadastro</th>
-            <th>Acoes</th>
+            {(pagePermissions['status-mina-editar'] || pagePermissions['status-mina-excluir']) && <th>Acoes</th>}
           </tr>
         </thead>
         <tbody>
@@ -1206,12 +1225,18 @@ function DashboardPage({ pagePermissions }) {
               <td data-label="Horario Inicio">{equip.horaInicio || '-'}</td>
               <td data-label="Horario Fim">{equip.horaFim || '-'}</td>
               <td data-label="Data e Hora Cadastro">{equip.dataHoraCadastro || '-'}</td>
-              <td data-label="Acoes">
-                <div className="acoes-inline">
-                  <button className="btn editar" type="button" onClick={() => editarEquipamento(idx)}>Editar</button>
-                  <button className="btn excluir" type="button" onClick={() => excluirEquipamento(idx)}>Excluir</button>
-                </div>
-              </td>
+              {(pagePermissions['status-mina-editar'] || pagePermissions['status-mina-excluir']) && (
+                <td data-label="Acoes">
+                  <div className="acoes-inline">
+                    {pagePermissions['status-mina-editar'] && (
+                      <button className="btn editar" type="button" onClick={() => editarEquipamento(idx)}>Editar</button>
+                    )}
+                    {pagePermissions['status-mina-excluir'] && (
+                      <button className="btn excluir" type="button" onClick={() => excluirEquipamento(idx)}>Excluir</button>
+                    )}
+                  </div>
+                </td>
+              )}
             </tr>
           ))}
         </tbody>
@@ -1414,7 +1439,7 @@ function HistoricoPage({ pagePermissions }) {
 
       <div className="page-actions">
         <LinkButton to="/">Voltar ao painel</LinkButton>
-        <LinkButton to="/indicadores-manutencao">Indicadores MTTR / MTBF</LinkButton>
+        {pagePermissions['indicadores-manutencao'] && <LinkButton to="/indicadores-manutencao">Indicadores MTTR / MTBF</LinkButton>}
       </div>
 
       {editId !== null && pagePermissions['historico-editar'] && (
@@ -2831,7 +2856,7 @@ export default function App() {
         <Route path="/historico" element={renderProtectedPage('historico', <HistoricoPage pagePermissions={pagePermissions} />)} />
         <Route
           path="/indicadores-manutencao"
-          element={renderProtectedPage('historico', (
+          element={renderProtectedPage('indicadores-manutencao', (
             <Suspense fallback={<main className="page-shell"><p>Carregando indicadores...</p></main>}>
               <MaintenanceMetricsDashboard />
             </Suspense>
