@@ -93,7 +93,7 @@ alter table public.user_access
 
 update public.user_access
 set
-  allowed_pages = '["dashboard", "historico", "relatorio-turnos", "historico-opcoes", "dashboard-turnos", "agente-ia"]'::jsonb,
+  allowed_pages = '["dashboard", "status-mina-editar", "status-mina-excluir", "historico", "relatorio-turnos", "historico-opcoes", "dashboard-turnos", "indicadores-manutencao", "agente-ia"]'::jsonb,
   updated_at = now()
 where status = 'approved'
   and (
