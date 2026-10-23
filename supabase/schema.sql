@@ -324,7 +324,7 @@ create policy "Allow approved read lubrificacoes"
       select 1 from public.user_access
       where user_access.user_id = auth.uid()
         and user_access.status = 'approved'
-        and user_access.allowed_pages ? 'lubrificadores'
+        and (user_access.allowed_pages ? 'lubrificadores' or user_access.allowed_pages ? 'gestao-lubrificacao')
     )
   );
 
