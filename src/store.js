@@ -23,7 +23,8 @@ export const PAGE_ACCESS_KEYS = [
   'agente-ia',
   'lubrificadores',
   'lubrificadores-editar',
-  'lubrificadores-excluir'
+  'lubrificadores-excluir',
+  'gestao-lubrificacao'
 ];
 
 function sanitizeAllowedPages(allowedPages) {
