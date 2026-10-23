@@ -259,7 +259,7 @@ export default function LubrificadoresPage({ pagePermissions = {} }) {
                       <button className="btn editar" type="button" onClick={() => handleEdit(item)}>Editar</button>
                     )}
                     {pagePermissions['lubrificadores-excluir'] && (
-                      <button className="btn secundario" type="button" onClick={() => handleDelete(item.id)}>Excluir</button>
+                      <button className="btn excluir" type="button" onClick={() => handleDelete(item.id)}>Excluir</button>
                     )}
                   </div>
                 </td>
