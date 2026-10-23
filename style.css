@@ -651,6 +651,15 @@ tbody tr:nth-child(even):hover {
 	box-shadow: 0 2px 4px rgba(16, 185, 129, 0.15);
 }
 
+.status-piscante {
+	animation: piscar-liberado 1s ease-in-out infinite;
+}
+
+@keyframes piscar-liberado {
+	0%, 100% { opacity: 1; box-shadow: 0 0 8px rgba(16, 185, 129, 0.8); }
+	50% { opacity: 0.35; box-shadow: none; }
+}
+
 .status-standby {
 	display: inline-block;
 	background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
