@@ -289,6 +289,30 @@ alter table public.lubrificacoes enable row level security;
 drop policy if exists "Allow approved read lubrificacoes" on public.lubrificacoes;
 drop policy if exists "Allow approved insert lubrificacoes" on public.lubrificacoes;
 drop policy if exists "Allow approved delete lubrificacoes" on public.lubrificacoes;
+drop policy if exists "Allow approved update lubrificacoes" on public.lubrificacoes;
+
+create policy "Allow approved update lubrificacoes"
+  on public.lubrificacoes
+  for update
+  to authenticated
+  using (
+    exists (select 1 from public.admin_users where admin_users.user_id = auth.uid())
+    or exists (
+      select 1 from public.user_access
+      where user_access.user_id = auth.uid()
+        and user_access.status = 'approved'
+        and user_access.allowed_pages ? 'lubrificadores-editar'
+    )
+  )
+  with check (
+    exists (select 1 from public.admin_users where admin_users.user_id = auth.uid())
+    or exists (
+      select 1 from public.user_access
+      where user_access.user_id = auth.uid()
+        and user_access.status = 'approved'
+        and user_access.allowed_pages ? 'lubrificadores-editar'
+    )
+  );
 
 create policy "Allow approved read lubrificacoes"
   on public.lubrificacoes
@@ -331,6 +355,6 @@ create policy "Allow approved delete lubrificacoes"
       select 1 from public.user_access
       where user_access.user_id = auth.uid()
         and user_access.status = 'approved'
-        and user_access.allowed_pages ? 'lubrificadores'
+        and user_access.allowed_pages ? 'lubrificadores-excluir'
     )
   );
