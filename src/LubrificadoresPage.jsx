@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { addLubrificacao, deleteLubrificacao, fetchLubrificacoes } from './store';
+import { addLubrificacao, deleteLubrificacao, fetchLubrificacoes, updateLubrificacao } from './store';
 import { formatDateTime } from './utils';
 
 const TURNOS =  ['A', 'B', 'C', 'D'];
@@ -23,9 +23,24 @@ function formatDuracao(inicio, fim) {
   return `${Math.floor(minutos / 60)}h ${String(minutos % 60).padStart(2, '0')}min`;
 }
 
-export default function LubrificadoresPage() {
+function pad2(value) {
+  return String(value).padStart(2, '0');
+}
+
+function toDateInput(iso) {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+
+function toTimeInput(iso) {
+  const d = new Date(iso);
+  return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+}
+
+export default function LubrificadoresPage({ pagePermissions = {} }) {
   const [registros, setRegistros] = useState([]);
   const [form, setForm] = useState(EMPTY_FORM);
+  const [editingId, setEditingId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -73,8 +88,14 @@ export default function LubrificadoresPage() {
     setSaving(true);
 
     try {
-      await addLubrificacao({ ...form, inicio, fim });
+      if (editingId) {
+        await updateLubrificacao(editingId, { ...form, inicio, fim });
+      } else {
+        await addLubrificacao({ ...form, inicio, fim });
+      }
       setForm(EMPTY_FORM);
+      setEditingId(null);
+      setError('');
       await carregar();
     } catch (err) {
       setError(err?.message || 'Falha ao salvar registro.');
@@ -83,13 +104,47 @@ export default function LubrificadoresPage() {
     }
   }
 
+  function handleEdit(item) {
+    if (!pagePermissions['lubrificadores-editar']) {
+      return;
+    }
+
+    setEditingId(item.id);
+    setForm({
+      painelLavra: item.painelLavra || '',
+      equipamento: item.equipamento || '',
+      nomeLubrificador: item.nomeLubrificador || '',
+      turno: item.turno || '',
+      turma: item.turma || '',
+      data: toDateInput(item.inicio),
+      horaInicio: toTimeInput(item.inicio),
+      horaFim: toTimeInput(item.fim),
+      litros: String(item.litros ?? ''),
+      tipoOleo: item.tipoOleo || ''
+    });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setForm(EMPTY_FORM);
+    setError('');
+  }
+
   async function handleDelete(id) {
+    if (!pagePermissions['lubrificadores-excluir']) {
+      return;
+    }
+
     if (!window.confirm('Excluir este registro?')) {
       return;
     }
 
     try {
       await deleteLubrificacao(id);
+      if (editingId === id) {
+        cancelEdit();
+      }
       await carregar();
     } catch (err) {
       setError(err?.message || 'Falha ao excluir registro.');
@@ -156,7 +211,8 @@ export default function LubrificadoresPage() {
           <label htmlFor="lub-tipo">Tipo de oleo</label>
           <input id="lub-tipo" type="text" required value={form.tipoOleo} onChange={(e) => updateField('tipoOleo', e.target.value)} />
         </div>
-        <button className="btn" type="submit" disabled={saving}>{saving ? 'Salvando...' : 'Salvar registro'}</button>
+        <button className="btn" type="submit" disabled={saving}>{saving ? 'Salvando...' : (editingId ? 'Salvar alteracoes' : 'Salvar registro')}</button>
+        {editingId && <button className="btn secundario" type="button" onClick={cancelEdit}>Cancelar edicao</button>}
       </form>
 
       {error && <div className="alert alert-danger">{error}</div>}
@@ -197,7 +253,16 @@ export default function LubrificadoresPage() {
                 <td>{formatDuracao(item.inicio, item.fim)}</td>
                 <td>{String(item.litros).replace('.', ',')}</td>
                 <td>{item.tipoOleo}</td>
-                <td><button className="btn secundario" type="button" onClick={() => handleDelete(item.id)}>Excluir</button></td>
+                <td>
+                  <div className="acoes-inline">
+                    {pagePermissions['lubrificadores-editar'] && (
+                      <button className="btn editar" type="button" onClick={() => handleEdit(item)}>Editar</button>
+                    )}
+                    {pagePermissions['lubrificadores-excluir'] && (
+                      <button className="btn secundario" type="button" onClick={() => handleDelete(item.id)}>Excluir</button>
+                    )}
+                  </div>
+                </td>
               </tr>
             ))}
           </tbody>
