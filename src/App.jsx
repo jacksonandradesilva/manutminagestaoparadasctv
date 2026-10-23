@@ -32,6 +32,7 @@ import { formatDateTime, formatMinutes, getDurationInMinutes } from './utils';
 // Importações de estilos
 const DowntimeTimelineChart = lazy(() => import('./DowntimeTimelineChart'));
 const MaintenanceMetricsDashboard = lazy(() => import('./MaintenanceMetricsDashboard'));
+const LubrificadoresPage = lazy(() => import('./LubrificadoresPage'));
 const TURNOS = ['A', 'B', 'C', 'D'];
 const PAGE_ACCESS_OPTIONS = [
   { key: 'dashboard', label: 'Status - Mina Manutencao', path: '/' },
@@ -46,7 +47,8 @@ const PAGE_ACCESS_OPTIONS = [
   { key: 'dashboard-turnos', label: 'Dashboard por turno', path: '/dashboard-turnos' },
   { key: 'graficos-supervisao', label: 'Graficos por supervisao', path: '/graficos-supervisao' },
   { key: 'indicadores-manutencao', label: 'Indicadores MTTR / MTBF', path: '/indicadores-manutencao' },
-  { key: 'agente-ia', label: 'Agente IA', path: '/agente-ia' }
+  { key: 'agente-ia', label: 'Agente IA', path: '/agente-ia' },
+  { key: 'lubrificadores', label: 'Controle de Lubrificadores', path: '/lubrificadores' }
 ];
 
 function normalizeAllowedPages(pages) {
@@ -1068,6 +1070,7 @@ function DashboardPage({ pagePermissions }) {
 
       <div className="top-actions">
         {pagePermissions.historico && <LinkButton to="/historico">Ver Gestao de Parada da Manutencao</LinkButton>}
+        {pagePermissions.lubrificadores && <LinkButton to="/lubrificadores">Controle de Lubrificadores</LinkButton>}
         {pagePermissions['indicadores-manutencao'] && <LinkButton to="/indicadores-manutencao">Indicadores MTTR / MTBF</LinkButton>}
         {pagePermissions['relatorio-turnos'] && <LinkButton to="/relatorio-turnos">Relatorio por Turno</LinkButton>}
         {pagePermissions['historico-opcoes'] && <LinkButton to="/historico-opcoes">Historico por Opcao</LinkButton>}
@@ -2867,6 +2870,14 @@ export default function App() {
         <Route path="/filtro-datas" element={renderProtectedPage('historico-datas', <HistoricoDatasPage />)} />
         <Route path="/dashboard-turnos" element={renderProtectedPage('dashboard-turnos', <DashboardTurnosPage />)} />
         <Route path="/graficos-supervisao" element={renderProtectedPage('graficos-supervisao', <GraficosSupervisaoPage />)} />
+        <Route
+          path="/lubrificadores"
+          element={renderProtectedPage('lubrificadores', (
+            <Suspense fallback={<main className="page-shell"><p>Carregando...</p></main>}>
+              <LubrificadoresPage />
+            </Suspense>
+          ))}
+        />
         <Route path="/agente-ia" element={renderProtectedPage('agente-ia', <AgenteIAPage />)} />
         <Route path="/admin-acessos" element={<AdminAccessPage isAdmin={isAdmin} />} />
         <Route path="/admin-auditoria" element={<AdminAuditoriaPage isAdmin={isAdmin} />} />
