@@ -170,13 +170,12 @@ export default function LubrificadoresPage() {
               <th>Duracao</th>
               <th>Litros</th>
               <th>Tipo de oleo</th>
-              <th>Registrado por</th>
               <th>Acoes</th>
             </tr>
           </thead>
           <tbody>
             {registros.length === 0 && !loading && (
-              <tr><td colSpan="12">Nenhum registro.</td></tr>
+              <tr><td colSpan="11">Nenhum registro.</td></tr>
             )}
             {registros.map((item) => (
               <tr key={item.id}>
@@ -190,7 +189,6 @@ export default function LubrificadoresPage() {
                 <td>{formatDuracao(item.inicio, item.fim)}</td>
                 <td>{String(item.litros).replace('.', ',')}</td>
                 <td>{item.tipoOleo}</td>
-                <td>{item.createdBy || '-'}</td>
                 <td><button className="btn secundario" type="button" onClick={() => handleDelete(item.id)}>Excluir</button></td>
               </tr>
             ))}
