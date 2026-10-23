@@ -21,7 +21,9 @@ export const PAGE_ACCESS_KEYS = [
   'status-mina-editar',
   'status-mina-excluir',
   'agente-ia',
-  'lubrificadores'
+  'lubrificadores',
+  'lubrificadores-editar',
+  'lubrificadores-excluir'
 ];
 
 function sanitizeAllowedPages(allowedPages) {
@@ -821,6 +823,51 @@ export async function addLubrificacao({ inicio, fim, litros, tipoOleo, painelLav
   }
 
   await writeAuditLog('lubrificacao_registrada', { litros: record.litros, tipoOleo: record.tipoOleo });
+}
+
+export async function updateLubrificacao(id, { inicio, fim, litros, tipoOleo, painelLavra, equipamento, nomeLubrificador, turno, turma }) {
+  const record = {
+    inicio: new Date(inicio).toISOString(),
+    fim: new Date(fim).toISOString(),
+    litros: Number(litros),
+    tipoOleo: String(tipoOleo || '').trim(),
+    painelLavra: String(painelLavra || '').trim(),
+    equipamento: String(equipamento || '').trim(),
+    nomeLubrificador: String(nomeLubrificador || '').trim(),
+    turno,
+    turma
+  };
+
+  if (!supabase) {
+    const all = readLocalLubrificacoes().map((item) => (
+      String(item.id) === String(id) ? { ...item, ...record } : item
+    ));
+    window.localStorage.setItem(LUBRIFICACOES_LOCAL_KEY, JSON.stringify(all));
+    return;
+  }
+
+  await requireAuthenticatedUser();
+
+  const { error } = await supabase
+    .from(LUBRIFICACOES_TABLE_NAME)
+    .update({
+      inicio: record.inicio,
+      fim: record.fim,
+      litros: record.litros,
+      tipo_oleo: record.tipoOleo,
+      painel_lavra: record.painelLavra,
+      equipamento: record.equipamento,
+      nome_lubrificador: record.nomeLubrificador,
+      turno: record.turno,
+      turma: record.turma
+    })
+    .eq('id', id);
+
+  if (error) {
+    throw error;
+  }
+
+  await writeAuditLog('lubrificacao_editada', { id });
 }
 
 export async function deleteLubrificacao(id) {
