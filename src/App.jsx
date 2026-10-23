@@ -48,7 +48,9 @@ const PAGE_ACCESS_OPTIONS = [
   { key: 'graficos-supervisao', label: 'Graficos por supervisao', path: '/graficos-supervisao' },
   { key: 'indicadores-manutencao', label: 'Indicadores MTTR / MTBF', path: '/indicadores-manutencao' },
   { key: 'agente-ia', label: 'Agente IA', path: '/agente-ia' },
-  { key: 'lubrificadores', label: 'Controle de Lubrificadores', path: '/lubrificadores' }
+  { key: 'lubrificadores', label: 'Controle de Lubrificadores', path: '/lubrificadores' },
+  { key: 'lubrificadores-editar', label: 'Editar registros do controle de lubrificadores', path: '/lubrificadores' },
+  { key: 'lubrificadores-excluir', label: 'Excluir registros do controle de lubrificadores', path: '/lubrificadores' }
 ];
 
 function normalizeAllowedPages(pages) {
@@ -2882,7 +2884,7 @@ export default function App() {
           path="/lubrificadores"
           element={renderProtectedPage('lubrificadores', (
             <Suspense fallback={<main className="page-shell"><p>Carregando...</p></main>}>
-              <LubrificadoresPage />
+              <LubrificadoresPage pagePermissions={pagePermissions} />
             </Suspense>
           ))}
         />
