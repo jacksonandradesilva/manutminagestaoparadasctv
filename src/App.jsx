@@ -33,6 +33,7 @@ import { formatDateTime, formatMinutes, getDurationInMinutes } from './utils';
 const DowntimeTimelineChart = lazy(() => import('./DowntimeTimelineChart'));
 const MaintenanceMetricsDashboard = lazy(() => import('./MaintenanceMetricsDashboard'));
 const LubrificadoresPage = lazy(() => import('./LubrificadoresPage'));
+const GestaoLubrificacaoPage = lazy(() => import('./GestaoLubrificacaoPage'));
 const TURNOS = ['A', 'B', 'C', 'D'];
 const PAGE_ACCESS_OPTIONS = [
   { key: 'dashboard', label: 'Status - Mina Manutencao', path: '/' },
@@ -50,7 +51,8 @@ const PAGE_ACCESS_OPTIONS = [
   { key: 'agente-ia', label: 'Agente IA', path: '/agente-ia' },
   { key: 'lubrificadores', label: 'Controle de Lubrificadores', path: '/lubrificadores' },
   { key: 'lubrificadores-editar', label: 'Editar registros do controle de lubrificadores', path: '/lubrificadores' },
-  { key: 'lubrificadores-excluir', label: 'Excluir registros do controle de lubrificadores', path: '/lubrificadores' }
+  { key: 'lubrificadores-excluir', label: 'Excluir registros do controle de lubrificadores', path: '/lubrificadores' },
+  { key: 'gestao-lubrificacao', label: 'Gestao de Lubrificacao', path: '/gestao-lubrificacao' }
 ];
 
 function normalizeAllowedPages(pages) {
@@ -1073,6 +1075,7 @@ function DashboardPage({ pagePermissions }) {
       <div className="top-actions">
         {pagePermissions.historico && <LinkButton to="/historico">Ver Gestao de Parada da Manutencao</LinkButton>}
         {pagePermissions.lubrificadores && <LinkButton to="/lubrificadores">Controle de Lubrificadores</LinkButton>}
+        {pagePermissions['gestao-lubrificacao'] && <LinkButton to="/gestao-lubrificacao">Gestao de Lubrificacao</LinkButton>}
         {pagePermissions['indicadores-manutencao'] && <LinkButton to="/indicadores-manutencao">Indicadores MTTR / MTBF</LinkButton>}
         {pagePermissions['relatorio-turnos'] && <LinkButton to="/relatorio-turnos">Relatorio por Turno</LinkButton>}
         {pagePermissions['historico-opcoes'] && <LinkButton to="/historico-opcoes">Historico por Opcao</LinkButton>}
@@ -2885,6 +2888,14 @@ export default function App() {
           element={renderProtectedPage('lubrificadores', (
             <Suspense fallback={<main className="page-shell"><p>Carregando...</p></main>}>
               <LubrificadoresPage pagePermissions={pagePermissions} />
+            </Suspense>
+          ))}
+        />
+        <Route
+          path="/gestao-lubrificacao"
+          element={renderProtectedPage('gestao-lubrificacao', (
+            <Suspense fallback={<main className="page-shell"><p>Carregando...</p></main>}>
+              <GestaoLubrificacaoPage />
             </Suspense>
           ))}
         />
