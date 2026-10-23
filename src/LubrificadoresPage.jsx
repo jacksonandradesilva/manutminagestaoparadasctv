@@ -11,8 +11,9 @@ const EMPTY_FORM = {
   nomeLubrificador: '',
   turno: '',
   turma: '',
-  inicio: '',
-  fim: '',
+  data: '',
+  horaInicio: '',
+  horaFim: '',
   litros: '',
   tipoOleo: ''
 };
@@ -56,7 +57,10 @@ export default function LubrificadoresPage() {
   async function handleSubmit(event) {
     event.preventDefault();
 
-    if (new Date(form.fim) <= new Date(form.inicio)) {
+    const inicio = `${form.data}T${form.horaInicio}`;
+    const fim = `${form.data}T${form.horaFim}`;
+
+    if (new Date(fim) <= new Date(inicio)) {
       setError('O horario final deve ser posterior ao inicial.');
       return;
     }
@@ -69,7 +73,7 @@ export default function LubrificadoresPage() {
     setSaving(true);
 
     try {
-      await addLubrificacao(form);
+      await addLubrificacao({ ...form, inicio, fim });
       setForm(EMPTY_FORM);
       await carregar();
     } catch (err) {
@@ -133,12 +137,16 @@ export default function LubrificadoresPage() {
           </select>
         </div>
         <div className="form-field">
-          <label htmlFor="lub-inicio">Inicio</label>
-          <input id="lub-inicio" type="datetime-local" required value={form.inicio} onChange={(e) => updateField('inicio', e.target.value)} />
+          <label htmlFor="lub-data">Data</label>
+          <input id="lub-data" type="date" required value={form.data} onChange={(e) => updateField('data', e.target.value)} />
         </div>
         <div className="form-field">
-          <label htmlFor="lub-fim">Fim</label>
-          <input id="lub-fim" type="datetime-local" required value={form.fim} onChange={(e) => updateField('fim', e.target.value)} />
+          <label htmlFor="lub-inicio">Horario inicio</label>
+          <input id="lub-inicio" type="time" required value={form.horaInicio} onChange={(e) => updateField('horaInicio', e.target.value)} />
+        </div>
+        <div className="form-field">
+          <label htmlFor="lub-fim">Horario fim</label>
+          <input id="lub-fim" type="time" required value={form.horaFim} onChange={(e) => updateField('horaFim', e.target.value)} />
         </div>
         <div className="form-field">
           <label htmlFor="lub-litros">Quantidade de oleo (litros)</label>
