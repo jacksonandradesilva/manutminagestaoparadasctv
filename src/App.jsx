@@ -1605,9 +1605,17 @@ function HistoricoPage({ pagePermissions }) {
             <tr key={item.idHistorico}>
               <td data-label="Painel">{item.nome || '-'}</td>
               <td data-label="Tag do Equipamento">{item.tagEquipamento || '-'}</td>
-              <td data-label="Status" className={`${item.status ? `status-${item.status}` : ''} ${item.status === 'parado' ? 'status-highlight' : ''}`.trim()}>
-                {item.status || '-'}
-              </td>
+              {(() => {
+                const liberado = Boolean(String(item.horaInicio || '').trim() && String(item.horaFim || '').trim());
+                const statusClass = liberado
+                  ? 'status-liberado status-piscante'
+                  : `${item.status ? `status-${item.status}` : ''} ${item.status === 'parado' ? 'status-highlight' : ''}`.trim();
+                return (
+                  <td data-label="Status" className={statusClass}>
+                    {liberado ? 'LIBERADO' : (item.status || '-')}
+                  </td>
+                );
+              })()}
               <td data-label="Turno">{item.turno || '-'}</td>
               <td data-label="Turma">{item.turma || '-'}</td>
               <td data-label="Equipe de Manutencao">{item.causa || '-'}</td>
