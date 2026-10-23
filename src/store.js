@@ -20,7 +20,8 @@ export const PAGE_ACCESS_KEYS = [
   'indicadores-manutencao',
   'status-mina-editar',
   'status-mina-excluir',
-  'agente-ia'
+  'agente-ia',
+  'lubrificadores'
 ];
 
 function sanitizeAllowedPages(allowedPages) {
@@ -727,4 +728,115 @@ export async function saveRelatorioTurnosNotas(notas) {
   });
 
   return result;
+}
+
+const LUBRIFICACOES_TABLE_NAME = 'lubrificacoes';
+const LUBRIFICACOES_LOCAL_KEY = 'mina_lubrificacoes_v1';
+
+function mapLubrificacaoRow(row) {
+  return {
+    id: row.id,
+    inicio: row.inicio,
+    fim: row.fim,
+    litros: Number(row.litros),
+    tipoOleo: row.tipo_oleo,
+    painelLavra: row.painel_lavra,
+    equipamento: row.equipamento,
+    nomeLubrificador: row.nome_lubrificador,
+    turno: row.turno,
+    turma: row.turma,
+    createdBy: row.created_by_email || ''
+  };
+}
+
+function readLocalLubrificacoes() {
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(LUBRIFICACOES_LOCAL_KEY) || '[]');
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function fetchLubrificacoes() {
+  if (!supabase) {
+    return readLocalLubrificacoes();
+  }
+
+  await requireAuthenticatedUser();
+
+  const { data, error } = await supabase
+    .from(LUBRIFICACOES_TABLE_NAME)
+    .select('id, inicio, fim, litros, tipo_oleo, painel_lavra, equipamento, nome_lubrificador, turno, turma, created_by_email')
+    .order('inicio', { ascending: false })
+    .limit(1000);
+
+  if (error) {
+    throw error;
+  }
+
+  return (data || []).map(mapLubrificacaoRow);
+}
+
+export async function addLubrificacao({ inicio, fim, litros, tipoOleo, painelLavra, equipamento, nomeLubrificador, turno, turma }) {
+  const record = {
+    inicio: new Date(inicio).toISOString(),
+    fim: new Date(fim).toISOString(),
+    litros: Number(litros),
+    tipoOleo: String(tipoOleo || '').trim(),
+    painelLavra: String(painelLavra || '').trim(),
+    equipamento: String(equipamento || '').trim(),
+    nomeLubrificador: String(nomeLubrificador || '').trim(),
+    turno,
+    turma
+  };
+
+  if (!supabase) {
+    const all = readLocalLubrificacoes();
+    all.push({ id: String(Date.now()), ...record, createdBy: '' });
+    window.localStorage.setItem(LUBRIFICACOES_LOCAL_KEY, JSON.stringify(all));
+    return;
+  }
+
+  const user = await requireAuthenticatedUser();
+
+  const { error } = await supabase
+    .from(LUBRIFICACOES_TABLE_NAME)
+    .insert({
+      inicio: record.inicio,
+      fim: record.fim,
+      litros: record.litros,
+      tipo_oleo: record.tipoOleo,
+      painel_lavra: record.painelLavra,
+      equipamento: record.equipamento,
+      nome_lubrificador: record.nomeLubrificador,
+      turno: record.turno,
+      turma: record.turma,
+      created_by: user.id,
+      created_by_email: user.email || null
+    });
+
+  if (error) {
+    throw error;
+  }
+
+  await writeAuditLog('lubrificacao_registrada', { litros: record.litros, tipoOleo: record.tipoOleo });
+}
+
+export async function deleteLubrificacao(id) {
+  if (!supabase) {
+    const all = readLocalLubrificacoes().filter((item) => String(item.id) !== String(id));
+    window.localStorage.setItem(LUBRIFICACOES_LOCAL_KEY, JSON.stringify(all));
+    return;
+  }
+
+  await requireAuthenticatedUser();
+
+  const { error } = await supabase.from(LUBRIFICACOES_TABLE_NAME).delete().eq('id', id);
+
+  if (error) {
+    throw error;
+  }
+
+  await writeAuditLog('lubrificacao_excluida', { id });
 }
