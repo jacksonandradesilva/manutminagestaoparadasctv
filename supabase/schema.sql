@@ -261,3 +261,76 @@ create policy "Allow admin delete audit logs"
       where admin_users.user_id = auth.uid()
     )
   );
+
+-- Controle de lubrificadores
+create table if not exists public.lubrificacoes (
+  id uuid primary key default gen_random_uuid(),
+  inicio timestamptz not null,
+  fim timestamptz not null,
+  litros numeric(10, 2) not null check (litros > 0),
+  tipo_oleo text not null,
+  created_by uuid references auth.users(id) on delete set null,
+  created_by_email text,
+  created_at timestamptz not null default now(),
+  check (fim > inicio)
+);
+
+alter table public.lubrificacoes add column if not exists painel_lavra text not null default '';
+alter table public.lubrificacoes add column if not exists equipamento text not null default '';
+alter table public.lubrificacoes add column if not exists nome_lubrificador text not null default '';
+alter table public.lubrificacoes add column if not exists turno text not null default 'A' check (turno in ('A', 'B', 'C', 'D'));
+alter table public.lubrificacoes add column if not exists turma text not null default 'A' check (turma in ('A', 'B', 'C', 'D', 'E'));
+
+create index if not exists lubrificacoes_inicio_idx
+  on public.lubrificacoes (inicio desc);
+
+alter table public.lubrificacoes enable row level security;
+
+drop policy if exists "Allow approved read lubrificacoes" on public.lubrificacoes;
+drop policy if exists "Allow approved insert lubrificacoes" on public.lubrificacoes;
+drop policy if exists "Allow approved delete lubrificacoes" on public.lubrificacoes;
+
+create policy "Allow approved read lubrificacoes"
+  on public.lubrificacoes
+  for select
+  to authenticated
+  using (
+    exists (select 1 from public.admin_users where admin_users.user_id = auth.uid())
+    or exists (
+      select 1 from public.user_access
+      where user_access.user_id = auth.uid()
+        and user_access.status = 'approved'
+        and user_access.allowed_pages ? 'lubrificadores'
+    )
+  );
+
+create policy "Allow approved insert lubrificacoes"
+  on public.lubrificacoes
+  for insert
+  to authenticated
+  with check (
+    created_by = auth.uid()
+    and (
+      exists (select 1 from public.admin_users where admin_users.user_id = auth.uid())
+      or exists (
+        select 1 from public.user_access
+        where user_access.user_id = auth.uid()
+          and user_access.status = 'approved'
+          and user_access.allowed_pages ? 'lubrificadores'
+      )
+    )
+  );
+
+create policy "Allow approved delete lubrificacoes"
+  on public.lubrificacoes
+  for delete
+  to authenticated
+  using (
+    exists (select 1 from public.admin_users where admin_users.user_id = auth.uid())
+    or exists (
+      select 1 from public.user_access
+      where user_access.user_id = auth.uid()
+        and user_access.status = 'approved'
+        and user_access.allowed_pages ? 'lubrificadores'
+    )
+  );
