@@ -185,8 +185,8 @@ export default function LubrificadoresPage() {
                 <td>{item.nomeLubrificador}</td>
                 <td>{item.turno}</td>
                 <td>{item.turma}</td>
-                <td>{formatDateTime(item.inicio)}</td>
-                <td>{formatDateTime(item.fim)}</td>
+                <td>{formatDateTime(new Date(item.inicio))}</td>
+                <td>{formatDateTime(new Date(item.fim))}</td>
                 <td>{formatDuracao(item.inicio, item.fim)}</td>
                 <td>{String(item.litros).replace('.', ',')}</td>
                 <td>{item.tipoOleo}</td>
@@ -200,4 +200,3 @@ export default function LubrificadoresPage() {
     </main>
   );
 }
-
