@@ -52,7 +52,9 @@ const PAGE_ACCESS_OPTIONS = [
   { key: 'lubrificadores', label: 'Controle de Lubrificadores', path: '/lubrificadores' },
   { key: 'lubrificadores-editar', label: 'Editar registros do controle de lubrificadores', path: '/lubrificadores' },
   { key: 'lubrificadores-excluir', label: 'Excluir registros do controle de lubrificadores', path: '/lubrificadores' },
-  { key: 'gestao-lubrificacao', label: 'Gestao de Lubrificacao', path: '/gestao-lubrificacao' }
+  { key: 'gestao-lubrificacao', label: 'Gestao de Lubrificacao', path: '/gestao-lubrificacao' },
+  { key: 'gestao-lubrificacao-editar', label: 'Editar registros da gestao de lubrificacao', path: '/gestao-lubrificacao' },
+  { key: 'gestao-lubrificacao-excluir', label: 'Excluir registros da gestao de lubrificacao', path: '/gestao-lubrificacao' }
 ];
 
 function normalizeAllowedPages(pages) {
@@ -2895,7 +2897,7 @@ export default function App() {
           path="/gestao-lubrificacao"
           element={renderProtectedPage('gestao-lubrificacao', (
             <Suspense fallback={<main className="page-shell"><p>Carregando...</p></main>}>
-              <GestaoLubrificacaoPage />
+              <GestaoLubrificacaoPage pagePermissions={pagePermissions} />
             </Suspense>
           ))}
         />
