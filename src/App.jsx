@@ -1498,7 +1498,7 @@ function HistoricoPage({ pagePermissions }) {
             </select>
           </div>
           <div className="form-field form-field-wide">
-            <label>Equipe de Manutencao</label>
+            <label>Descrição da Parada</label>
             <input
               value={editData.causa}
               onChange={(event) => setEditData({ ...editData, causa: event.target.value })}
@@ -1598,7 +1598,7 @@ function HistoricoPage({ pagePermissions }) {
             <th>Status</th>
             <th>Turno</th>
             <th>Turma</th>
-            <th>Equipe de Manutencao</th>
+            <th>Descrição da Parada</th>
             <th>Supervisao</th>
             <th>Inicio</th>
             <th>Fim</th>
@@ -1625,7 +1625,7 @@ function HistoricoPage({ pagePermissions }) {
               })()}
               <td data-label="Turno">{item.turno || '-'}</td>
               <td data-label="Turma">{item.turma || '-'}</td>
-              <td data-label="Equipe de Manutencao">{item.causa || '-'}</td>
+              <td data-label="Descrição da Parada">{item.causa || '-'}</td>
               <td data-label="Supervisao">{item.supervisor || '-'}</td>
               <td data-label="Inicio">{item.horaInicio || '-'}</td>
               <td data-label="Fim">{item.horaFim || '-'}</td>
