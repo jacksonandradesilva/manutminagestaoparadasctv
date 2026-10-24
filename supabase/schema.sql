@@ -279,7 +279,7 @@ alter table public.lubrificacoes add column if not exists painel_lavra text not 
 alter table public.lubrificacoes add column if not exists equipamento text not null default '';
 alter table public.lubrificacoes add column if not exists nome_lubrificador text not null default '';
 alter table public.lubrificacoes add column if not exists turno text not null default 'A' check (turno in ('A', 'B', 'C', 'D'));
-alter table public.lubrificacoes add column if not exists turma text not null default 'A' check (turma in ('A', 'B', 'C', 'D', 'E'));
+alter table public.lubrificacoes add column if not exists oculto_controle boolean not null default false;
 
 create index if not exists lubrificacoes_inicio_idx
   on public.lubrificacoes (inicio desc);
@@ -301,7 +301,7 @@ create policy "Allow approved update lubrificacoes"
       select 1 from public.user_access
       where user_access.user_id = auth.uid()
         and user_access.status = 'approved'
-        and user_access.allowed_pages ? 'lubrificadores-editar'
+        and user_access.allowed_pages ?| array['lubrificadores-editar', 'lubrificadores-excluir', 'gestao-lubrificacao-editar']
     )
   )
   with check (
@@ -310,7 +310,7 @@ create policy "Allow approved update lubrificacoes"
       select 1 from public.user_access
       where user_access.user_id = auth.uid()
         and user_access.status = 'approved'
-        and user_access.allowed_pages ? 'lubrificadores-editar'
+        and user_access.allowed_pages ?| array['lubrificadores-editar', 'lubrificadores-excluir', 'gestao-lubrificacao-editar']
     )
   );
 
@@ -355,6 +355,6 @@ create policy "Allow approved delete lubrificacoes"
       select 1 from public.user_access
       where user_access.user_id = auth.uid()
         and user_access.status = 'approved'
-        and user_access.allowed_pages ? 'lubrificadores-excluir'
+        and user_access.allowed_pages ? 'gestao-lubrificacao-excluir'
     )
   );
