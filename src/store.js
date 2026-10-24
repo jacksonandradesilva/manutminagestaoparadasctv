@@ -24,7 +24,9 @@ export const PAGE_ACCESS_KEYS = [
   'lubrificadores',
   'lubrificadores-editar',
   'lubrificadores-excluir',
-  'gestao-lubrificacao'
+  'gestao-lubrificacao',
+  'gestao-lubrificacao-editar',
+  'gestao-lubrificacao-excluir'
 ];
 
 function sanitizeAllowedPages(allowedPages) {
@@ -748,7 +750,8 @@ function mapLubrificacaoRow(row) {
     nomeLubrificador: row.nome_lubrificador,
     turno: row.turno,
     turma: row.turma,
-    createdBy: row.created_by_email || ''
+    createdBy: row.created_by_email || '',
+    ocultoControle: Boolean(row.oculto_controle)
   };
 }
 
@@ -761,18 +764,25 @@ function readLocalLubrificacoes() {
   }
 }
 
-export async function fetchLubrificacoes() {
+export async function fetchLubrificacoes({ incluirOcultos = false } = {}) {
   if (!supabase) {
-    return readLocalLubrificacoes();
+    const all = readLocalLubrificacoes();
+    return incluirOcultos ? all : all.filter((item) => !item.ocultoControle);
   }
 
   await requireAuthenticatedUser();
 
-  const { data, error } = await supabase
+  let query = supabase
     .from(LUBRIFICACOES_TABLE_NAME)
-    .select('id, inicio, fim, litros, tipo_oleo, painel_lavra, equipamento, nome_lubrificador, turno, turma, created_by_email')
+    .select('id, inicio, fim, litros, tipo_oleo, painel_lavra, equipamento, nome_lubrificador, turno, turma, created_by_email, oculto_controle')
     .order('inicio', { ascending: false })
     .limit(1000);
+
+  if (!incluirOcultos) {
+    query = query.eq('oculto_controle', false);
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     throw error;
@@ -871,7 +881,31 @@ export async function updateLubrificacao(id, { inicio, fim, litros, tipoOleo, pa
   await writeAuditLog('lubrificacao_editada', { id });
 }
 
+// Excluir no Controle apenas oculta o registro; ele permanece na Gestao de Lubrificacao.
 export async function deleteLubrificacao(id) {
+  if (!supabase) {
+    const all = readLocalLubrificacoes().map((item) => (
+      String(item.id) === String(id) ? { ...item, ocultoControle: true } : item
+    ));
+    window.localStorage.setItem(LUBRIFICACOES_LOCAL_KEY, JSON.stringify(all));
+    return;
+  }
+
+  await requireAuthenticatedUser();
+
+  const { error } = await supabase
+    .from(LUBRIFICACOES_TABLE_NAME)
+    .update({ oculto_controle: true })
+    .eq('id', id);
+
+  if (error) {
+    throw error;
+  }
+
+  await writeAuditLog('lubrificacao_removida_controle', { id });
+}
+
+export async function deleteLubrificacaoDefinitiva(id) {
   if (!supabase) {
     const all = readLocalLubrificacoes().filter((item) => String(item.id) !== String(id));
     window.localStorage.setItem(LUBRIFICACOES_LOCAL_KEY, JSON.stringify(all));
