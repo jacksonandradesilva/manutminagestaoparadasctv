@@ -1,7 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { fetchLubrificacoes } from './store';
+import { deleteLubrificacaoDefinitiva, fetchLubrificacoes, updateLubrificacao } from './store';
 import { formatDateTime } from './utils';
+
+const TURNOS = ['A', 'B', 'C', 'D'];
+const TURMAS = ['A', 'B', 'C', 'D', 'E'];
+
+function toTimeInput(iso) {
+  const d = new Date(iso);
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
 
 const EMPTY_FILTERS = {
   dataInicio: '',
@@ -36,18 +44,98 @@ function formatNumero(value) {
   return Number(value).toFixed(1).replace('.', ',');
 }
 
-export default function GestaoLubrificacaoPage() {
+export default function GestaoLubrificacaoPage({ pagePermissions = {} }) {
   const [registros, setRegistros] = useState([]);
   const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [editingId, setEditingId] = useState(null);
+  const [editForm, setEditForm] = useState(null);
+  const [saving, setSaving] = useState(false);
+
+  async function carregar() {
+    try {
+      setRegistros(await fetchLubrificacoes({ incluirOcultos: true }));
+      setError('');
+    } catch (err) {
+      setError(err?.message || 'Falha ao carregar registros.');
+    } finally {
+      setLoading(false);
+    }
+  }
 
   useEffect(() => {
-    fetchLubrificacoes()
-      .then((data) => setRegistros(data))
-      .catch((err) => setError(err?.message || 'Falha ao carregar registros.'))
-      .finally(() => setLoading(false));
+    carregar();
   }, []);
+
+  function updateEditField(field, value) {
+    setEditForm((prev) => ({ ...prev, [field]: value }));
+  }
+
+  function handleEdit(item) {
+    setEditingId(item.id);
+    setEditForm({
+      painelLavra: item.painelLavra || '',
+      equipamento: item.equipamento || '',
+      nomeLubrificador: item.nomeLubrificador || '',
+      turno: item.turno || '',
+      turma: item.turma || '',
+      data: toDateKey(item.inicio),
+      horaInicio: toTimeInput(item.inicio),
+      horaFim: toTimeInput(item.fim),
+      litros: String(item.litros ?? ''),
+      tipoOleo: item.tipoOleo || ''
+    });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setEditForm(null);
+  }
+
+  async function handleSaveEdit(event) {
+    event.preventDefault();
+    const inicio = `${editForm.data}T${editForm.horaInicio}`;
+    const fim = `${editForm.data}T${editForm.horaFim}`;
+
+    if (new Date(fim) <= new Date(inicio)) {
+      setError('O horario final deve ser posterior ao inicial.');
+      return;
+    }
+
+    if (!(Number(editForm.litros) > 0)) {
+      setError('Informe uma quantidade de litros maior que zero.');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      await updateLubrificacao(editingId, { ...editForm, inicio, fim });
+      cancelEdit();
+      await carregar();
+    } catch (err) {
+      setError(err?.message || 'Falha ao salvar registro.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDelete(id) {
+    if (!window.confirm('Excluir este registro definitivamente?')) {
+      return;
+    }
+
+    try {
+      await deleteLubrificacaoDefinitiva(id);
+      if (editingId === id) {
+        cancelEdit();
+      }
+      await carregar();
+    } catch (err) {
+      setError(err?.message || 'Falha ao excluir registro.');
+    }
+  }
 
   function updateFilter(field, value) {
     setFilters((prev) => ({ ...prev, [field]: value }));
@@ -160,6 +248,59 @@ export default function GestaoLubrificacaoPage() {
         <button className="btn secundario" type="button" onClick={() => setFilters(EMPTY_FILTERS)}>Limpar filtros</button>
       </div>
 
+      {editingId && editForm && (
+        <form className="filter-bar date-filter-bar" onSubmit={handleSaveEdit}>
+          <div className="form-field">
+            <label htmlFor="ge-painel">Painel de lavra</label>
+            <input id="ge-painel" type="text" required value={editForm.painelLavra} onChange={(e) => updateEditField('painelLavra', e.target.value)} />
+          </div>
+          <div className="form-field">
+            <label htmlFor="ge-equip">Equipamento</label>
+            <input id="ge-equip" type="text" required value={editForm.equipamento} onChange={(e) => updateEditField('equipamento', e.target.value)} />
+          </div>
+          <div className="form-field">
+            <label htmlFor="ge-nome">Nome do lubrificador</label>
+            <input id="ge-nome" type="text" required value={editForm.nomeLubrificador} onChange={(e) => updateEditField('nomeLubrificador', e.target.value)} />
+          </div>
+          <div className="form-field">
+            <label htmlFor="ge-turno">Turno</label>
+            <select id="ge-turno" required value={editForm.turno} onChange={(e) => updateEditField('turno', e.target.value)}>
+              <option value="">Selecione</option>
+              {TURNOS.map((t) => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </div>
+          <div className="form-field">
+            <label htmlFor="ge-turma">Turma</label>
+            <select id="ge-turma" required value={editForm.turma} onChange={(e) => updateEditField('turma', e.target.value)}>
+              <option value="">Selecione</option>
+              {TURMAS.map((t) => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </div>
+          <div className="form-field">
+            <label htmlFor="ge-data">Data</label>
+            <input id="ge-data" type="date" required value={editForm.data} onChange={(e) => updateEditField('data', e.target.value)} />
+          </div>
+          <div className="form-field">
+            <label htmlFor="ge-inicio">Horario inicio</label>
+            <input id="ge-inicio" type="time" required value={editForm.horaInicio} onChange={(e) => updateEditField('horaInicio', e.target.value)} />
+          </div>
+          <div className="form-field">
+            <label htmlFor="ge-fim">Horario fim</label>
+            <input id="ge-fim" type="time" required value={editForm.horaFim} onChange={(e) => updateEditField('horaFim', e.target.value)} />
+          </div>
+          <div className="form-field">
+            <label htmlFor="ge-litros">Quantidade de oleo (litros)</label>
+            <input id="ge-litros" type="number" min="0.1" step="0.1" required value={editForm.litros} onChange={(e) => updateEditField('litros', e.target.value)} />
+          </div>
+          <div className="form-field">
+            <label htmlFor="ge-tipo">Tipo de oleo</label>
+            <input id="ge-tipo" type="text" required value={editForm.tipoOleo} onChange={(e) => updateEditField('tipoOleo', e.target.value)} />
+          </div>
+          <button className="btn" type="submit" disabled={saving}>{saving ? 'Salvando...' : 'Salvar alteracoes'}</button>
+          <button className="btn secundario" type="button" onClick={cancelEdit}>Cancelar edicao</button>
+        </form>
+      )}
+
       {error && <div className="alert alert-danger">{error}</div>}
       {loading && <div className="alert alert-info">Carregando registros...</div>}
 
@@ -213,11 +354,12 @@ export default function GestaoLubrificacaoPage() {
               <th>Horas</th>
               <th>Oleo (L)</th>
               <th>Tipo de oleo</th>
+              <th>Acoes</th>
             </tr>
           </thead>
           <tbody>
             {filtrados.length === 0 && !loading && (
-              <tr><td colSpan="10">Nenhum registro.</td></tr>
+              <tr><td colSpan="11">Nenhum registro.</td></tr>
             )}
             {filtrados.map((item) => (
               <tr key={item.id}>
@@ -231,6 +373,16 @@ export default function GestaoLubrificacaoPage() {
                 <td>{formatHoras(getHoras(item))}</td>
                 <td>{formatNumero(item.litros)}</td>
                 <td>{item.tipoOleo}</td>
+                <td>
+                  <div className="acoes-inline">
+                    {pagePermissions['gestao-lubrificacao-editar'] && (
+                      <button className="btn editar" type="button" onClick={() => handleEdit(item)}>Editar</button>
+                    )}
+                    {pagePermissions['gestao-lubrificacao-excluir'] && (
+                      <button className="btn excluir" type="button" onClick={() => handleDelete(item.id)}>Excluir</button>
+                    )}
+                  </div>
+                </td>
               </tr>
             ))}
           </tbody>
@@ -239,4 +391,3 @@ export default function GestaoLubrificacaoPage() {
     </main>
   );
 }
-
