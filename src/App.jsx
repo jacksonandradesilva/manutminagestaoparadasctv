@@ -1160,12 +1160,12 @@ function DashboardPage({ pagePermissions }) {
         </div>
 
         <div className="form-field form-field-wide">
-          <label htmlFor="causaParada">Equipamento/Causa:</label>
+          <label htmlFor="causaParada">CAUSA DA PARADA:</label>
           <input
             id="causaParada"
             value={formData.causa}
             onChange={(event) => setFormData({ ...formData, causa: event.target.value })}
-            placeholder="Equipamento e causa (se aplicavel)"
+            placeholder="Descrição da Causa da Parada do Equip. (se aplicavel)"
           />
         </div>
 
