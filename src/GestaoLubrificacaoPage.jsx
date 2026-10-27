@@ -15,11 +15,7 @@ const EMPTY_FILTERS = {
   dataInicio: '',
   dataFim: '',
   painelLavra: '',
-  equipamento: '',
-  litrosMin: '',
-  litrosMax: '',
-  horasMin: '',
-  horasMax: ''
+  equipamento: ''
 };
 
 function pad2(value) {
@@ -151,34 +147,31 @@ export default function GestaoLubrificacaoPage({ pagePermissions = {} }) {
   );
 
   const filtrados = useMemo(() => {
-    const litrosMin = filters.litrosMin === '' ? null : Number(filters.litrosMin);
-    const litrosMax = filters.litrosMax === '' ? null : Number(filters.litrosMax);
-    const horasMin = filters.horasMin === '' ? null : Number(filters.horasMin);
-    const horasMax = filters.horasMax === '' ? null : Number(filters.horasMax);
-
     return registros
       .filter((item) => {
         const dia = toDateKey(item.inicio);
-        const litros = Number(item.litros) || 0;
-        const horas = getHoras(item);
 
         if (filters.dataInicio && dia < filters.dataInicio) return false;
         if (filters.dataFim && dia > filters.dataFim) return false;
         if (filters.painelLavra && item.painelLavra !== filters.painelLavra) return false;
         if (filters.equipamento && item.equipamento !== filters.equipamento) return false;
-        if (litrosMin !== null && litros < litrosMin) return false;
-        if (litrosMax !== null && litros > litrosMax) return false;
-        if (horasMin !== null && horas < horasMin) return false;
-        if (horasMax !== null && horas > horasMax) return false;
         return true;
       })
       .sort((a, b) => new Date(b.inicio) - new Date(a.inicio));
   }, [registros, filters]);
 
-  const totais = useMemo(() => ({
-    litros: filtrados.reduce((sum, item) => sum + (Number(item.litros) || 0), 0),
-    horas: filtrados.reduce((sum, item) => sum + getHoras(item), 0)
-  }), [filtrados]);
+  const totais = useMemo(() => {
+    const isHidraulico = (item) => String(item.tipoOleo || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().includes('hidraul');
+    const soma = (lista) => lista.reduce((sum, item) => sum + (Number(item.litros) || 0), 0);
+    const hidraulicos = filtrados.filter(isHidraulico);
+    const lubrificantes = filtrados.filter((item) => !isHidraulico(item));
+    return {
+      litros: soma(filtrados),
+      hidraulico: soma(hidraulicos),
+      lubrificante: soma(lubrificantes),
+      horas: filtrados.reduce((sum, item) => sum + getHoras(item), 0)
+    };
+  }, [filtrados]);
 
   const resumoEquipamentos = useMemo(() => {
     const map = new Map();
@@ -229,23 +222,7 @@ export default function GestaoLubrificacaoPage({ pagePermissions = {} }) {
             {equipamentos.map((eq) => <option key={eq} value={eq}>{eq}</option>)}
           </select>
         </div>
-        <div className="form-field">
-          <label htmlFor="gl-litros-min">Oleo minimo (L)</label>
-          <input id="gl-litros-min" type="number" min="0" step="0.1" value={filters.litrosMin} onChange={(e) => updateFilter('litrosMin', e.target.value)} />
-        </div>
-        <div className="form-field">
-          <label htmlFor="gl-litros-max">Oleo maximo (L)</label>
-          <input id="gl-litros-max" type="number" min="0" step="0.1" value={filters.litrosMax} onChange={(e) => updateFilter('litrosMax', e.target.value)} />
-        </div>
-        <div className="form-field">
-          <label htmlFor="gl-horas-min">Horas minimas</label>
-          <input id="gl-horas-min" type="number" min="0" step="0.1" value={filters.horasMin} onChange={(e) => updateFilter('horasMin', e.target.value)} />
-        </div>
-        <div className="form-field">
-          <label htmlFor="gl-horas-max">Horas maximas</label>
-          <input id="gl-horas-max" type="number" min="0" step="0.1" value={filters.horasMax} onChange={(e) => updateFilter('horasMax', e.target.value)} />
-        </div>
-        <button className="btn secundario" type="button" onClick={() => setFilters(EMPTY_FILTERS)}>Limpar filtros</button>
+        <button className="btn perigo" type="button" onClick={() => setFilters(EMPTY_FILTERS)}>Limpar filtros</button>
       </div>
 
       {editingId && editForm && (
@@ -304,11 +281,28 @@ export default function GestaoLubrificacaoPage({ pagePermissions = {} }) {
       {error && <div className="alert alert-danger">{error}</div>}
       {loading && <div className="alert alert-info">Carregando registros...</div>}
 
-      <p>
-        <strong>Registros:</strong> {filtrados.length}
-        {' | '}<strong>Total de oleo:</strong> {formatNumero(totais.litros)} L
-        {' | '}<strong>Total de horas:</strong> {formatHoras(totais.horas)}
-      </p>
+      <section className="summary-cards">
+        <article className="card">
+          <span>Registros</span>
+          <strong>{filtrados.length}</strong>
+        </article>
+        <article className="card">
+          <span>Total de oleo</span>
+          <strong>{formatNumero(totais.litros)} L</strong>
+        </article>
+        <article className="card">
+          <span>Total hidraulico</span>
+          <strong>{formatNumero(totais.hidraulico)} L</strong>
+        </article>
+        <article className="card">
+          <span>Total lubrificante</span>
+          <strong>{formatNumero(totais.lubrificante)} L</strong>
+        </article>
+        <article className="card">
+          <span>Total de horas</span>
+          <strong>{formatHoras(totais.horas)}</strong>
+        </article>
+      </section>
 
       <h2>Resumo por painel e equipamento</h2>
       <div className="table-wrapper">
