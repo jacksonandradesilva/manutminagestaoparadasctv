@@ -34,6 +34,7 @@ const DowntimeTimelineChart = lazy(() => import('./DowntimeTimelineChart'));
 const MaintenanceMetricsDashboard = lazy(() => import('./MaintenanceMetricsDashboard'));
 const LubrificadoresPage = lazy(() => import('./LubrificadoresPage'));
 const GestaoLubrificacaoPage = lazy(() => import('./GestaoLubrificacaoPage'));
+const ExportacaoDadosPage = lazy(() => import('./ExportacaoDadosPage'));
 const TURNOS = ['A', 'B', 'C', 'D'];
 const PAGE_ACCESS_OPTIONS = [
   { key: 'dashboard', label: 'Status - Mina Manutencao', path: '/' },
@@ -240,6 +241,7 @@ function SessionBar({ email, isAdmin, onSignOut }) {
       <div className="session-actions">
         {isAdmin && <LinkButton to="/admin-acessos">Liberacao de Acessos</LinkButton>}
         {isAdmin && <LinkButton to="/admin-auditoria">Auditoria Admin</LinkButton>}
+        {isAdmin && <LinkButton to="/exportacao-dados">Exportar Dados</LinkButton>}
         <button type="button" className="btn secundario" onClick={onSignOut}>Sair</button>
       </div>
     </div>
@@ -1165,7 +1167,7 @@ function DashboardPage({ pagePermissions }) {
             id="causaParada"
             value={formData.causa}
             onChange={(event) => setFormData({ ...formData, causa: event.target.value })}
-            placeholder="Descrição da Causa da Parada do Equip. (se aplicavel)"
+            placeholder="Descrição da Causa da Parada do Equip.(se aplicavel)"
           />
         </div>
 
@@ -2904,6 +2906,14 @@ export default function App() {
         <Route path="/agente-ia" element={renderProtectedPage('agente-ia', <AgenteIAPage />)} />
         <Route path="/admin-acessos" element={<AdminAccessPage isAdmin={isAdmin} />} />
         <Route path="/admin-auditoria" element={<AdminAuditoriaPage isAdmin={isAdmin} />} />
+        <Route
+          path="/exportacao-dados"
+          element={(
+            <Suspense fallback={<main className="page-shell"><p>Carregando...</p></main>}>
+              <ExportacaoDadosPage isAdmin={isAdmin} />
+            </Suspense>
+          )}
+        />
       </Routes>
     </>
   );
