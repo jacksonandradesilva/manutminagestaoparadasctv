@@ -1,388 +1,360 @@
 import { useEffect, useMemo, useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { deleteLubrificacaoDefinitiva, fetchLubrificacoes, updateLubrificacao } from './store';
-import { formatDateTime } from './utils';
+import * as XLSX from 'xlsx';
+import { addLubrificacao, fetchLubrificacoes, getState, saveState, writeAuditLog } from './store';
 
-const TURNOS = ['A', 'B', 'C', 'D'];
-const TURMAS = ['A', 'B', 'C', 'D', 'E'];
+function parseCsv(text) {
+  const src = text.replace(/^\uFEFF/, '');
+  const firstLine = src.split(/\r?\n/, 1)[0] || '';
+  const sep = (firstLine.match(/;/g) || []).length >= (firstLine.match(/,/g) || []).length ? ';' : ',';
+  const table = [];
+  let row = [];
+  let cell = '';
+  let quoted = false;
 
-function toTimeInput(iso) {
-  const d = new Date(iso);
-  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  for (let i = 0; i < src.length; i += 1) {
+    const ch = src[i];
+    if (quoted) {
+      if (ch === '"' && src[i + 1] === '"') { cell += '"'; i += 1; }
+      else if (ch === '"') { quoted = false; }
+      else { cell += ch; }
+    } else if (ch === '"') {
+      quoted = true;
+    } else if (ch === sep) {
+      row.push(cell); cell = '';
+    } else if (ch === '\n' || ch === '\r') {
+      if (ch === '\r' && src[i + 1] === '\n') i += 1;
+      row.push(cell); cell = '';
+      table.push(row); row = [];
+    } else {
+      cell += ch;
+    }
+  }
+  if (cell !== '' || row.length) { row.push(cell); table.push(row); }
+
+  const [header = [], ...body] = table.filter((r) => r.some((c) => c !== ''));
+  return body.map((r) => Object.fromEntries(header.map((h, i) => [h.trim(), r[i] ?? ''])));
 }
 
-const EMPTY_FILTERS = {
-  dataInicio: '',
-  dataFim: '',
-  painelLavra: '',
-  equipamento: ''
-};
-
-function pad2(value) {
-  return String(value).padStart(2, '0');
+// Restaura tipos que a exportacao achatou (JSON aninhado, booleanos e numeros).
+function restoreValue(value) {
+  if (typeof value !== 'string') {
+    return value;
+  }
+  const v = value.trim();
+  if ((v.startsWith('{') && v.endsWith('}')) || (v.startsWith('[') && v.endsWith(']'))) {
+    try { return JSON.parse(v); } catch { return value; }
+  }
+  if (v === 'true') return true;
+  if (v === 'false') return false;
+  if (/^-?(0|[1-9]\d*)(\.\d+)?$/.test(v)) return Number(v);
+  return value;
 }
 
-function toDateKey(iso) {
-  const d = new Date(iso);
-  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+function restoreRows(rows) {
+  return rows
+    .map((row) => Object.fromEntries(
+      Object.entries(row).filter(([k, v]) => k && v !== '' && v !== null && v !== undefined).map(([k, v]) => [k, restoreValue(v)])
+    ))
+    .filter((row) => Object.keys(row).length > 0);
 }
 
-function getHoras(item) {
-  return Math.max(0, (new Date(item.fim) - new Date(item.inicio)) / 3600000);
+async function readFileRows(file) {
+  if (/\.csv$/i.test(file.name)) {
+    return { Arquivo: parseCsv(await file.text()) };
+  }
+  const wb = XLSX.read(await file.arrayBuffer(), { type: 'array' });
+  return Object.fromEntries(wb.SheetNames.map((name) => [name, XLSX.utils.sheet_to_json(wb.Sheets[name], { defval: '' })]));
 }
 
-function formatHoras(horas) {
-  const minutos = Math.round(horas * 60);
-  return `${Math.floor(minutos / 60)}h ${pad2(minutos % 60)}min`;
+function mergeUnique(current, incoming) {
+  const keyOf = (item) => (item && item.id !== undefined ? `id:${item.id}` : JSON.stringify(item));
+  const seen = new Set(current.map(keyOf));
+  const added = incoming.filter((item) => !seen.has(keyOf(item)));
+  return { merged: [...current, ...added], added: added.length };
 }
 
-function formatNumero(value) {
-  return Number(value).toFixed(1).replace('.', ',');
+const DATASETS = [
+  { key: 'historico', label: 'Historico de paradas' },
+  { key: 'equipamentos', label: 'Status dos equipamentos' },
+  { key: 'lubrificacoes', label: 'Lubrificacoes' },
+  { key: 'relatorioTurnos', label: 'Notas do relatorio de turnos' }
+];
+
+function flattenValue(value) {
+  if (value === null || value === undefined) {
+    return '';
+  }
+  if (typeof value === 'object') {
+    return JSON.stringify(value);
+  }
+  return value;
 }
 
-export default function GestaoLubrificacaoPage({ pagePermissions = {} }) {
-  const [registros, setRegistros] = useState([]);
-  const [filters, setFilters] = useState(EMPTY_FILTERS);
+function normalizeRows(list) {
+  return (Array.isArray(list) ? list : []).map((item) => {
+    const row = {};
+    Object.entries(item && typeof item === 'object' ? item : { valor: item }).forEach(([k, v]) => {
+      row[k] = flattenValue(v);
+    });
+    return row;
+  });
+}
+
+function relatorioToRows(notas) {
+  return Object.entries(notas && typeof notas === 'object' ? notas : {}).map(([chave, valor]) => ({
+    chave,
+    valor: flattenValue(valor)
+  }));
+}
+
+function escapeCsv(value) {
+  const text = String(value ?? '');
+  return /[";\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
+
+function getColumns(rows) {
+  const cols = [];
+  rows.forEach((row) => Object.keys(row).forEach((k) => { if (!cols.includes(k)) cols.push(k); }));
+  return cols;
+}
+
+function toCsv(rows) {
+  const cols = getColumns(rows);
+  const lines = [cols.map(escapeCsv).join(';')];
+  rows.forEach((row) => lines.push(cols.map((c) => escapeCsv(row[c])).join(';')));
+  return `\uFEFF${lines.join('\r\n')}`;
+}
+
+function download(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function stamp() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function ExportacaoDadosPage({ isAdmin }) {
+  const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [editingId, setEditingId] = useState(null);
-  const [editForm, setEditForm] = useState(null);
-  const [saving, setSaving] = useState(false);
+  const [selected, setSelected] = useState('historico');
+  const [importTarget, setImportTarget] = useState('historico');
+  const [importMode, setImportMode] = useState('adicionar');
+  const [sheets, setSheets] = useState(null);
+  const [sheetName, setSheetName] = useState('');
+  const [fileName, setFileName] = useState('');
+  const [importing, setImporting] = useState(false);
+  const [importMsg, setImportMsg] = useState('');
+  const [importErr, setImportErr] = useState('');
 
-  async function carregar() {
+  async function load() {
+    setLoading(true);
+    setError('');
     try {
-      setRegistros(await fetchLubrificacoes({ incluirOcultos: true }));
-      setError('');
+      const [state, lubs] = await Promise.all([getState(), fetchLubrificacoes({ incluirOcultos: true })]);
+      setData({
+        historico: normalizeRows(state.historicoParadas),
+        equipamentos: normalizeRows(state.equipamentos),
+        lubrificacoes: normalizeRows(lubs),
+        relatorioTurnos: relatorioToRows(state.relatorioTurnosNotas)
+      });
     } catch (err) {
-      setError(err?.message || 'Falha ao carregar registros.');
+      setError(err.message || 'Falha ao carregar dados.');
     } finally {
       setLoading(false);
     }
   }
 
   useEffect(() => {
-    carregar();
-  }, []);
+    if (isAdmin) {
+      load();
+    }
+  }, [isAdmin]);
 
-  function updateEditField(field, value) {
-    setEditForm((prev) => ({ ...prev, [field]: value }));
+  const rows = useMemo(() => (data ? data[selected] : []), [data, selected]);
+  const columns = useMemo(() => getColumns(rows), [rows]);
+
+  if (!isAdmin) {
+    return (
+      <main className="page-shell">
+        <p>Acesso restrito ao administrador.</p>
+        <NavLink to="/" className="btn secundario">Voltar</NavLink>
+      </main>
+    );
   }
 
-  function handleEdit(item) {
-    setEditingId(item.id);
-    setEditForm({
-      painelLavra: item.painelLavra || '',
-      equipamento: item.equipamento || '',
-      nomeLubrificador: item.nomeLubrificador || '',
-      turno: item.turno || '',
-      turma: item.turma || '',
-      data: toDateKey(item.inicio),
-      horaInicio: toTimeInput(item.inicio),
-      horaFim: toTimeInput(item.fim),
-      litros: String(item.litros ?? ''),
-      tipoOleo: item.tipoOleo || ''
+  function exportCsv() {
+    download(new Blob([toCsv(rows)], { type: 'text/csv;charset=utf-8' }), `${selected}_${stamp()}.csv`);
+    writeAuditLog('exportacao_dados', { formato: 'csv', conjunto: selected, registros: rows.length }).catch(() => {});
+  }
+
+  function exportXlsx(all) {
+    const wb = XLSX.utils.book_new();
+    const sets = all ? DATASETS : DATASETS.filter((d) => d.key === selected);
+    sets.forEach((d) => {
+      const sheetRows = data[d.key];
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(sheetRows), d.label.slice(0, 31));
     });
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    XLSX.writeFile(wb, `${all ? 'todos_os_dados' : selected}_${stamp()}.xlsx`);
+    writeAuditLog('exportacao_dados', { formato: 'xlsx', conjunto: all ? 'todos' : selected }).catch(() => {});
   }
 
-  function cancelEdit() {
-    setEditingId(null);
-    setEditForm(null);
-  }
-
-  async function handleSaveEdit(event) {
-    event.preventDefault();
-    const inicio = `${editForm.data}T${editForm.horaInicio}`;
-    const fim = `${editForm.data}T${editForm.horaFim}`;
-
-    if (new Date(fim) <= new Date(inicio)) {
-      setError('O horario final deve ser posterior ao inicial.');
-      return;
-    }
-
-    if (!(Number(editForm.litros) > 0)) {
-      setError('Informe uma quantidade de litros maior que zero.');
-      return;
-    }
-
-    setSaving(true);
+  async function handleFile(event) {
+    const file = event.target.files?.[0];
+    setImportMsg('');
+    setImportErr('');
+    setSheets(null);
+    if (!file) return;
     try {
-      await updateLubrificacao(editingId, { ...editForm, inicio, fim });
-      cancelEdit();
-      await carregar();
+      const result = await readFileRows(file);
+      const names = Object.keys(result);
+      setSheets(result);
+      setSheetName(names[0] || '');
+      setFileName(file.name);
+      // Sugere o destino pelo nome da aba/arquivo quando coincide com um conjunto.
+      const guess = DATASETS.find((d) => names[0] === d.label.slice(0, 31) || file.name.startsWith(d.key));
+      if (guess) setImportTarget(guess.key);
     } catch (err) {
-      setError(err?.message || 'Falha ao salvar registro.');
-    } finally {
-      setSaving(false);
+      setImportErr(`Nao foi possivel ler o arquivo: ${err.message || err}`);
     }
   }
 
-  async function handleDelete(id) {
-    if (!window.confirm('Excluir este registro definitivamente?')) {
+  async function runImport() {
+    setImportMsg('');
+    setImportErr('');
+    const incoming = restoreRows(sheets?.[sheetName] || []);
+    if (!incoming.length) {
+      setImportErr('Nenhum registro encontrado na planilha selecionada.');
+      return;
+    }
+    const label = DATASETS.find((d) => d.key === importTarget).label;
+    const replace = importMode === 'substituir' && importTarget !== 'lubrificacoes';
+    if (!window.confirm(`${replace ? 'SUBSTITUIR todos os dados de' : 'Adicionar a'} "${label}" com ${incoming.length} registro(s) de ${fileName}?`)) {
       return;
     }
 
+    setImporting(true);
     try {
-      await deleteLubrificacaoDefinitiva(id);
-      if (editingId === id) {
-        cancelEdit();
+      let added = incoming.length;
+      if (importTarget === 'lubrificacoes') {
+        added = 0;
+        const invalid = [];
+        for (const [i, r] of incoming.entries()) {
+          const ok = !Number.isNaN(new Date(r.inicio).getTime()) && !Number.isNaN(new Date(r.fim).getTime()) && Number.isFinite(Number(r.litros));
+          if (!ok) { invalid.push(i + 2); continue; }
+          await addLubrificacao(r);
+          added += 1;
+        }
+        if (invalid.length) {
+          setImportErr(`Linhas ignoradas por data/litros invalidos: ${invalid.slice(0, 20).join(', ')}`);
+        }
+      } else {
+        const state = await getState();
+        if (importTarget === 'relatorioTurnos') {
+          const notas = Object.fromEntries(incoming.filter((r) => r.chave !== undefined).map((r) => [String(r.chave), r.valor]));
+          state.relatorioTurnosNotas = replace ? notas : { ...state.relatorioTurnosNotas, ...notas };
+          added = Object.keys(notas).length;
+        } else {
+          const field = importTarget === 'historico' ? 'historicoParadas' : 'equipamentos';
+          if (replace) {
+            state[field] = incoming;
+          } else {
+            const res = mergeUnique(state[field] || [], incoming);
+            state[field] = res.merged;
+            added = res.added;
+          }
+        }
+        await saveState(state);
       }
-      await carregar();
+      await writeAuditLog('importacao_dados', { conjunto: importTarget, modo: replace ? 'substituir' : 'adicionar', registros: added }).catch(() => {});
+      setImportMsg(`Importacao concluida: ${added} registro(s) em "${label}".`);
+      setSheets(null);
+      await load();
     } catch (err) {
-      setError(err?.message || 'Falha ao excluir registro.');
+      setImportErr(`Falha na importacao: ${err.message || err}`);
+    } finally {
+      setImporting(false);
     }
   }
-
-  function updateFilter(field, value) {
-    setFilters((prev) => ({ ...prev, [field]: value }));
-  }
-
-  const paineis = useMemo(
-    () => [...new Set(registros.map((r) => r.painelLavra).filter(Boolean))].sort(),
-    [registros]
-  );
-  const equipamentos = useMemo(
-    () => [...new Set(registros.map((r) => r.equipamento).filter(Boolean))].sort(),
-    [registros]
-  );
-
-  const filtrados = useMemo(() => {
-    return registros
-      .filter((item) => {
-        const dia = toDateKey(item.inicio);
-
-        if (filters.dataInicio && dia < filters.dataInicio) return false;
-        if (filters.dataFim && dia > filters.dataFim) return false;
-        if (filters.painelLavra && item.painelLavra !== filters.painelLavra) return false;
-        if (filters.equipamento && item.equipamento !== filters.equipamento) return false;
-        return true;
-      })
-      .sort((a, b) => new Date(b.inicio) - new Date(a.inicio));
-  }, [registros, filters]);
-
-  const totais = useMemo(() => {
-    const isHidraulico = (item) => String(item.tipoOleo || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().includes('hidraul');
-    const soma = (lista) => lista.reduce((sum, item) => sum + (Number(item.litros) || 0), 0);
-    const hidraulicos = filtrados.filter(isHidraulico);
-    const lubrificantes = filtrados.filter((item) => !isHidraulico(item));
-    return {
-      litros: soma(filtrados),
-      hidraulico: soma(hidraulicos),
-      lubrificante: soma(lubrificantes),
-      horas: filtrados.reduce((sum, item) => sum + getHoras(item), 0)
-    };
-  }, [filtrados]);
-
-  const resumoEquipamentos = useMemo(() => {
-    const map = new Map();
-    filtrados.forEach((item) => {
-      const key = `${item.painelLavra}||${item.equipamento}`;
-      const atual = map.get(key) || { painelLavra: item.painelLavra, equipamento: item.equipamento, registros: 0, litros: 0, horas: 0 };
-      atual.registros += 1;
-      atual.litros += Number(item.litros) || 0;
-      atual.horas += getHoras(item);
-      map.set(key, atual);
-    });
-    return [...map.values()].sort((a, b) => b.litros - a.litros);
-  }, [filtrados]);
 
   return (
     <main className="page-shell">
-      <header className="page-header">
-        <div>
-          <h1>Gestao de Lubrificacao</h1>
-        </div>
-        <img className="page-header-logo" src="/img/logo-header (1).png" alt="Logo" />
-      </header>
+      <h1>Exportacao e Importacao de Dados</h1>
+      <NavLink to="/" className="btn secundario">Voltar</NavLink>
 
-      <div className="page-actions">
-        <NavLink to="/" end className="btn-link">Voltar ao painel</NavLink>
+      {error && <p className="erro">{error}</p>}
+
+      <div className="filtros" style={{ margin: '16px 0', display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+        <select value={selected} onChange={(e) => setSelected(e.target.value)}>
+          {DATASETS.map((d) => (
+            <option key={d.key} value={d.key}>{d.label}{data ? ` (${data[d.key].length})` : ''}</option>
+          ))}
+        </select>
+        <button type="button" className="btn" onClick={exportCsv} disabled={loading || !rows.length}>Exportar CSV</button>
+        <button type="button" className="btn" onClick={() => exportXlsx(false)} disabled={loading || !rows.length}>Exportar Excel</button>
+        <button type="button" className="btn" onClick={() => exportXlsx(true)} disabled={loading || !data}>Exportar tudo (Excel)</button>
+        <button type="button" className="btn secundario" onClick={load} disabled={loading}>Recarregar</button>
       </div>
 
-      <div className="filter-bar date-filter-bar">
-        <div className="form-field">
-          <label htmlFor="gl-data-inicio">Data inicio</label>
-          <input id="gl-data-inicio" type="date" value={filters.dataInicio} onChange={(e) => updateFilter('dataInicio', e.target.value)} />
-        </div>
-        <div className="form-field">
-          <label htmlFor="gl-data-fim">Data fim</label>
-          <input id="gl-data-fim" type="date" value={filters.dataFim} onChange={(e) => updateFilter('dataFim', e.target.value)} />
-        </div>
-        <div className="form-field">
-          <label htmlFor="gl-painel">Painel de lavra</label>
-          <select id="gl-painel" value={filters.painelLavra} onChange={(e) => updateFilter('painelLavra', e.target.value)}>
-            <option value="">Todos</option>
-            {paineis.map((p) => <option key={p} value={p}>{p}</option>)}
-          </select>
-        </div>
-        <div className="form-field">
-          <label htmlFor="gl-equip">Equipamento</label>
-          <select id="gl-equip" value={filters.equipamento} onChange={(e) => updateFilter('equipamento', e.target.value)}>
-            <option value="">Todos</option>
-            {equipamentos.map((eq) => <option key={eq} value={eq}>{eq}</option>)}
-          </select>
-        </div>
-        <button className="btn perigo" type="button" onClick={() => setFilters(EMPTY_FILTERS)}>Limpar filtros</button>
-      </div>
-
-      {editingId && editForm && (
-        <form className="filter-bar date-filter-bar" onSubmit={handleSaveEdit}>
-          <div className="form-field">
-            <label htmlFor="ge-painel">Painel de lavra</label>
-            <input id="ge-painel" type="text" required value={editForm.painelLavra} onChange={(e) => updateEditField('painelLavra', e.target.value)} />
+      {loading ? <p>Carregando...</p> : (
+        <>
+          <p>{rows.length} registro(s). Pre-visualizacao dos primeiros 50:</p>
+          <div style={{ overflowX: 'auto' }}>
+            <table>
+              <thead>
+                <tr>{columns.map((c) => <th key={c}>{c}</th>)}</tr>
+              </thead>
+              <tbody>
+                {rows.slice(0, 50).map((row, i) => (
+                  <tr key={i}>{columns.map((c) => <td key={c}>{String(row[c] ?? '')}</td>)}</tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-          <div className="form-field">
-            <label htmlFor="ge-equip">Equipamento</label>
-            <input id="ge-equip" type="text" required value={editForm.equipamento} onChange={(e) => updateEditField('equipamento', e.target.value)} />
-          </div>
-          <div className="form-field">
-            <label htmlFor="ge-nome">Nome do lubrificador</label>
-            <input id="ge-nome" type="text" required value={editForm.nomeLubrificador} onChange={(e) => updateEditField('nomeLubrificador', e.target.value)} />
-          </div>
-          <div className="form-field">
-            <label htmlFor="ge-turno">Turno</label>
-            <select id="ge-turno" required value={editForm.turno} onChange={(e) => updateEditField('turno', e.target.value)}>
-              <option value="">Selecione</option>
-              {TURNOS.map((t) => <option key={t} value={t}>{t}</option>)}
-            </select>
-          </div>
-          <div className="form-field">
-            <label htmlFor="ge-turma">Turma</label>
-            <select id="ge-turma" required value={editForm.turma} onChange={(e) => updateEditField('turma', e.target.value)}>
-              <option value="">Selecione</option>
-              {TURMAS.map((t) => <option key={t} value={t}>{t}</option>)}
-            </select>
-          </div>
-          <div className="form-field">
-            <label htmlFor="ge-data">Data</label>
-            <input id="ge-data" type="date" required value={editForm.data} onChange={(e) => updateEditField('data', e.target.value)} />
-          </div>
-          <div className="form-field">
-            <label htmlFor="ge-inicio">Horario inicio</label>
-            <input id="ge-inicio" type="time" required value={editForm.horaInicio} onChange={(e) => updateEditField('horaInicio', e.target.value)} />
-          </div>
-          <div className="form-field">
-            <label htmlFor="ge-fim">Horario fim</label>
-            <input id="ge-fim" type="time" required value={editForm.horaFim} onChange={(e) => updateEditField('horaFim', e.target.value)} />
-          </div>
-          <div className="form-field">
-            <label htmlFor="ge-litros">Quantidade de oleo (litros)</label>
-            <input id="ge-litros" type="number" min="0.1" step="0.1" required value={editForm.litros} onChange={(e) => updateEditField('litros', e.target.value)} />
-          </div>
-          <div className="form-field">
-            <label htmlFor="ge-tipo">Tipo de oleo</label>
-            <input id="ge-tipo" type="text" required value={editForm.tipoOleo} onChange={(e) => updateEditField('tipoOleo', e.target.value)} />
-          </div>
-          <button className="btn" type="submit" disabled={saving}>{saving ? 'Salvando...' : 'Salvar alteracoes'}</button>
-          <button className="btn secundario" type="button" onClick={cancelEdit}>Cancelar edicao</button>
-        </form>
+        </>
       )}
 
-      {error && <div className="alert alert-danger">{error}</div>}
-      {loading && <div className="alert alert-info">Carregando registros...</div>}
-
-      <section className="summary-cards">
-        <article className="card">
-          <span>Registros</span>
-          <strong>{filtrados.length}</strong>
-        </article>
-        <article className="card">
-          <span>Total de oleo</span>
-          <strong>{formatNumero(totais.litros)} L</strong>
-        </article>
-        <article className="card">
-          <span>Total hidraulico</span>
-          <strong>{formatNumero(totais.hidraulico)} L</strong>
-        </article>
-        <article className="card">
-          <span>Total lubrificante</span>
-          <strong>{formatNumero(totais.lubrificante)} L</strong>
-        </article>
-        <article className="card">
-          <span>Total de horas</span>
-          <strong>{formatHoras(totais.horas)}</strong>
-        </article>
-      </section>
-
-      <h2>Resumo por painel e equipamento</h2>
-      <div className="table-wrapper">
-        <table>
-          <thead>
-            <tr>
-              <th>Painel de lavra</th>
-              <th>Equipamento</th>
-              <th>Registros</th>
-              <th>Oleo (L)</th>
-              <th>Horas</th>
-            </tr>
-          </thead>
-          <tbody>
-            {resumoEquipamentos.length === 0 && !loading && (
-              <tr><td colSpan="5">Nenhum registro para os filtros selecionados.</td></tr>
-            )}
-            {resumoEquipamentos.map((r) => (
-              <tr key={`${r.painelLavra}-${r.equipamento}`}>
-                <td>{r.painelLavra}</td>
-                <td>{r.equipamento}</td>
-                <td>{r.registros}</td>
-                <td>{formatNumero(r.litros)}</td>
-                <td>{formatHoras(r.horas)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <h2 style={{ marginTop: 32 }}>Importar dados</h2>
+      <p>Aceita arquivos .csv ou .xlsx no mesmo formato da exportacao (primeira linha com os nomes das colunas).</p>
+      {importMsg && <p>{importMsg}</p>}
+      {importErr && <p className="erro">{importErr}</p>}
+      <div className="filtros" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+        <input type="file" accept=".csv,.xlsx,.xls" onChange={handleFile} disabled={importing} />
+        {sheets && Object.keys(sheets).length > 1 && (
+          <select value={sheetName} onChange={(e) => setSheetName(e.target.value)}>
+            {Object.keys(sheets).map((n) => <option key={n} value={n}>{n}</option>)}
+          </select>
+        )}
+        <select value={importTarget} onChange={(e) => setImportTarget(e.target.value)} disabled={importing}>
+          {DATASETS.map((d) => <option key={d.key} value={d.key}>{d.label}</option>)}
+        </select>
+        <select value={importMode} onChange={(e) => setImportMode(e.target.value)} disabled={importing || importTarget === 'lubrificacoes'}>
+          <option value="adicionar">Adicionar (ignora duplicados)</option>
+          <option value="substituir">Substituir tudo</option>
+        </select>
+        <button
+          type="button"
+          className="btn"
+          style={{ backgroundColor: '#facc15', borderColor: '#facc15', color: '#1f2937', opacity: !sheets || importing ? 0.6 : 1 }}
+          onClick={runImport}
+          disabled={!sheets || importing}
+        >
+          {importing ? 'Importando...' : 'Importar'}
+        </button>
       </div>
-
-      <h2>Registros detalhados</h2>
-      <div className="table-wrapper">
-        <table>
-          <thead>
-            <tr>
-              <th>Painel de lavra</th>
-              <th>Equipamento</th>
-              <th>Lubrificador</th>
-              <th>Turno</th>
-              <th>Turma</th>
-              <th>Inicio</th>
-              <th>Fim</th>
-              <th>Horas</th>
-              <th>Oleo (L)</th>
-              <th>Tipo de oleo</th>
-              <th>Acoes</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtrados.length === 0 && !loading && (
-              <tr><td colSpan="11">Nenhum registro.</td></tr>
-            )}
-            {filtrados.map((item) => (
-              <tr key={item.id}>
-                <td>{item.painelLavra}</td>
-                <td>{item.equipamento}</td>
-                <td>{item.nomeLubrificador}</td>
-                <td>{item.turno}</td>
-                <td>{item.turma}</td>
-                <td>{formatDateTime(new Date(item.inicio))}</td>
-                <td>{formatDateTime(new Date(item.fim))}</td>
-                <td>{formatHoras(getHoras(item))}</td>
-                <td>{formatNumero(item.litros)}</td>
-                <td>{item.tipoOleo}</td>
-                <td>
-                  <div className="acoes-inline">
-                    {pagePermissions['gestao-lubrificacao-editar'] && (
-                      <button className="btn editar" type="button" onClick={() => handleEdit(item)}>Editar</button>
-                    )}
-                    {pagePermissions['gestao-lubrificacao-excluir'] && (
-                      <button className="btn excluir" type="button" onClick={() => handleDelete(item.id)}>Excluir</button>
-                    )}
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      {importTarget === 'lubrificacoes' && (
+        <p>Lubrificacoes sao sempre adicionadas como novos registros (colunas: inicio, fim, litros, tipoOleo, painelLavra, equipamento, nomeLubrificador, turno, turma).</p>
+      )}
     </main>
   );
 }
 
+export default ExportacaoDadosPage;
