@@ -2000,7 +2000,7 @@ function HistoricoDatasPage() {
             <th>Status</th>
             <th>Turno</th>
             <th>Turma</th>
-            <th>Equipe de Manutencao</th>
+            <th>Descrição da Parada</th>
             <th>Supervisao</th>
             <th>Inicio</th>
             <th>Fim</th>
@@ -2013,10 +2013,20 @@ function HistoricoDatasPage() {
             <tr key={item.idHistorico}>
               <td data-label="Painel">{item.nome || '-'}</td>
               <td data-label="Tag do Equipamento">{item.tagEquipamento || '-'}</td>
-              <td data-label="Status">{item.status || '-'}</td>
+              {(() => {
+                const liberado = Boolean(String(item.horaInicio || '').trim() && String(item.horaFim || '').trim());
+                const statusClass = liberado
+                  ? 'status-liberado'
+                  : `${item.status ? `status-${item.status}` : ''} ${item.status === 'parado' ? 'status-highlight' : ''}`.trim();
+                return (
+                  <td data-label="Status" className={statusClass}>
+                    {liberado ? 'LIBERADO' : (item.status || '-')}
+                  </td>
+                );
+              })()}
               <td data-label="Turno">{item.turno || '-'}</td>
               <td data-label="Turma">{item.turma || '-'}</td>
-              <td data-label="Equipe de Manutencao">{item.causa || '-'}</td>
+              <td data-label="Descrição da Parada">{item.causa || '-'}</td>
               <td data-label="Supervisao">{item.supervisor || '-'}</td>
               <td data-label="Inicio">{item.horaInicio || '-'}</td>
               <td data-label="Fim">{item.horaFim || '-'}</td>
