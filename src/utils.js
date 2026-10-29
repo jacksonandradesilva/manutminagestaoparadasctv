@@ -11,6 +11,16 @@ export function formatDateTime(date) {
   return new Intl.DateTimeFormat('pt-BR', options).format(date);
 }
 
+export function formatDateOnly(date) {
+  const options = {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  };
+
+  return new Intl.DateTimeFormat('pt-BR', options).format(date);
+}
+
 export function parseTimeToMinutes(timeValue) {
   if (!timeValue || !timeValue.includes(':')) {
     return null;
