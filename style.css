@@ -548,6 +548,18 @@ form textarea::placeholder {
 	color: var(--text-tertiary);
 }
 
+form input.duration-field {
+	background: #e5e7eb;
+	font-weight: 700;
+	text-align: center;
+}
+
+td.duration-cell {
+	background: #e5e7eb;
+	font-weight: 700;
+	text-align: center;
+}
+
 form input:focus,
 form textarea:focus,
 form select:focus,
