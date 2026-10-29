@@ -28,7 +28,7 @@ import {
   writeAuditLog
 } from './store';
 // Importações de componentes de página
-import { formatDateTime, formatMinutes, getDurationInMinutes } from './utils';
+import { formatDateOnly, formatDateTime, formatMinutes, getDurationInMinutes } from './utils';
 // Importações de estilos
 const DowntimeTimelineChart = lazy(() => import('./DowntimeTimelineChart'));
 const MaintenanceMetricsDashboard = lazy(() => import('./MaintenanceMetricsDashboard'));
@@ -912,6 +912,22 @@ function DashboardPage({ pagePermissions }) {
     horaFim: ''
   });
 
+  const supervisores = useMemo(() => {
+    return [...new Set(
+      [...equipamentos, ...historicoParadas]
+        .map((item) => String(item.supervisor || '').trim())
+        .filter(Boolean)
+    )].sort((first, second) => first.localeCompare(second, 'pt-BR'));
+  }, [equipamentos, historicoParadas]);
+
+  const paineisCadastrados = useMemo(() => {
+    return [...new Set(
+      [...equipamentos, ...historicoParadas]
+        .map((item) => String(item.nome || '').trim())
+        .filter(Boolean)
+    )].sort((first, second) => first.localeCompare(second, 'pt-BR'));
+  }, [equipamentos, historicoParadas]);
+
   useEffect(() => {
     let active = true;
 
@@ -992,7 +1008,7 @@ function DashboardPage({ pagePermissions }) {
     }
 
     const nextId = equipamentos.length > 0 ? Math.max(...equipamentos.map((item) => item.id || 0)) + 1 : 1;
-    const dataHoraCadastro = formatDateTime(new Date());
+    const dataHoraCadastro = formatDateOnly(new Date());
     const equipamentoAtual = editandoIndex !== null ? equipamentos[editandoIndex] : null;
 
     const equipamentoObj = {
@@ -1097,10 +1113,17 @@ function DashboardPage({ pagePermissions }) {
           <label htmlFor="nomeEquip">Painel de Operacao:</label>
           <input
             id="nomeEquip"
+            list="paineis-cadastrados"
             value={formData.nome}
             onChange={(event) => setFormData({ ...formData, nome: event.target.value })}
             required
+            placeholder="Selecione ou digite um painel"
           />
+          <datalist id="paineis-cadastrados">
+            {paineisCadastrados.map((painel) => (
+              <option key={painel} value={painel} />
+            ))}
+          </datalist>
         </div>
 
         <div className="form-field">
@@ -1175,10 +1198,16 @@ function DashboardPage({ pagePermissions }) {
           <label htmlFor="supervisorEquip">Supervisao:</label>
           <input
             id="supervisorEquip"
+            list="supervisores-cadastrados"
             value={formData.supervisor}
             onChange={(event) => setFormData({ ...formData, supervisor: event.target.value })}
-            placeholder="Nome da supervisao"
+            placeholder="Selecione ou digite uma supervisao"
           />
+          <datalist id="supervisores-cadastrados">
+            {supervisores.map((supervisor) => (
+              <option key={supervisor} value={supervisor} />
+            ))}
+          </datalist>
         </div>
 
         <div className="form-field">
@@ -1220,7 +1249,7 @@ function DashboardPage({ pagePermissions }) {
             <th>Supervisao</th>
             <th>Horario Inicio</th>
             <th>Horario Fim</th>
-            <th>Data e Hora Cadastro</th>
+            <th>Data do Cadastro</th>
             {(pagePermissions['status-mina-editar'] || pagePermissions['status-mina-excluir']) && <th>Acoes</th>}
           </tr>
         </thead>
@@ -1236,7 +1265,7 @@ function DashboardPage({ pagePermissions }) {
               <td data-label="Supervisao">{equip.supervisor || '-'}</td>
               <td data-label="Horario Inicio">{equip.horaInicio || '-'}</td>
               <td data-label="Horario Fim">{equip.horaFim || '-'}</td>
-              <td data-label="Data e Hora Cadastro">{equip.dataHoraCadastro || '-'}</td>
+              <td data-label="Data do Cadastro">{String(equip.dataHoraCadastro || '-').split(',')[0].trim()}</td>
               {(pagePermissions['status-mina-editar'] || pagePermissions['status-mina-excluir']) && (
                 <td data-label="Acoes">
                   <div className="acoes-inline">
@@ -1286,6 +1315,40 @@ function parseBrazilianDateTime(value) {
   }
 
   return date;
+}
+
+function parseBrazilianDate(value) {
+  const match = String(value || '').trim().match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (!match) {
+    return null;
+  }
+
+  const [, dayText, monthText, yearText] = match;
+  const day = Number(dayText);
+  const month = Number(monthText);
+  const year = Number(yearText);
+  const date = new Date(year, month - 1, day);
+
+  if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) {
+    return null;
+  }
+
+  return date;
+}
+
+function getRecordDateDisplay(value) {
+  const text = String(value || '').trim();
+  const brazilianDate = text.match(/^(\d{2}\/\d{2}\/\d{4})/);
+  if (brazilianDate) {
+    return brazilianDate[1];
+  }
+
+  const isoDate = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (isoDate) {
+    return `${isoDate[3]}/${isoDate[2]}/${isoDate[1]}`;
+  }
+
+  return text.split(',')[0].trim();
 }
 
 function HistoricoPage({ pagePermissions }) {
@@ -1385,7 +1448,7 @@ function HistoricoPage({ pagePermissions }) {
       supervisor: item.supervisor || '',
       horaInicio: item.horaInicio || '',
       horaFim: item.horaFim || '',
-      dataHoraRegistro: item.dataHoraRegistro || '',
+      dataHoraRegistro: getRecordDateDisplay(item.dataHoraRegistro),
       acao: ['corretiva', 'preventiva', 'preditiva', 'programada'].includes(item.acao) ? item.acao : 'corretiva'
     });
   }
@@ -1415,11 +1478,11 @@ function HistoricoPage({ pagePermissions }) {
 
     const dataHoraRegistroInformada = editData.dataHoraRegistro.trim();
     const dataHoraRegistroConvertida = dataHoraRegistroInformada
-      ? parseBrazilianDateTime(dataHoraRegistroInformada)
+      ? parseBrazilianDate(dataHoraRegistroInformada)
       : null;
 
     if (dataHoraRegistroInformada && !dataHoraRegistroConvertida) {
-      window.alert('Informe a data no formato dd/mm/aaaa, hh:mm:ss.');
+      window.alert('Informe a data no formato dd/mm/aaaa.');
       return;
     }
 
@@ -1435,7 +1498,7 @@ function HistoricoPage({ pagePermissions }) {
         causa: editData.causa.trim(),
         supervisor: editData.supervisor.trim(),
         dataHoraRegistro: dataHoraRegistroConvertida
-          ? formatDateTime(dataHoraRegistroConvertida)
+          ? formatDateOnly(dataHoraRegistroConvertida)
           : item.dataHoraRegistro
       };
     });
@@ -1530,23 +1593,23 @@ function HistoricoPage({ pagePermissions }) {
             />
           </div>
           <div className="form-field">
-            <label>Data do Registro</label>
+            <label>Data da Parada</label>
             <input
               type="text"
               value={editData.dataHoraRegistro}
               onChange={(event) => setEditData({ ...editData, dataHoraRegistro: event.target.value })}
-              placeholder="dd/mm/aaaa, hh:mm:ss"
-              maxLength={20}
+              placeholder="dd/mm/aaaa"
+              maxLength={10}
             />
           </div>
           <div className="form-field">
-            <label>Tipo de Manutencao</label>
-            <select value={editData.acao} onChange={(event) => setEditData({ ...editData, acao: event.target.value })} required>
-              <option value="corretiva">Corretiva</option>
-              <option value="preventiva">Preventiva</option>
-              <option value="preditiva">Preditiva</option>
-              <option value="programada">Programada</option>
-            </select>
+            <label>Duração</label>
+            <input
+              className="duration-field"
+              type="text"
+              value={formatMinutes(getDurationInMinutes(editData))}
+              readOnly
+            />
           </div>
           <div className="form-actions">
             <button type="submit">Salvar edicao</button>
@@ -1604,8 +1667,8 @@ function HistoricoPage({ pagePermissions }) {
             <th>Supervisao</th>
             <th>Inicio</th>
             <th>Fim</th>
-            <th>Tipo de Manutencao</th>
-            <th>Registro</th>
+            <th>Duração</th>
+            <th>Data da Parada</th>
             <th>Acoes</th>
           </tr>
         </thead>
@@ -1631,8 +1694,8 @@ function HistoricoPage({ pagePermissions }) {
               <td data-label="Supervisao">{item.supervisor || '-'}</td>
               <td data-label="Inicio">{item.horaInicio || '-'}</td>
               <td data-label="Fim">{item.horaFim || '-'}</td>
-              <td data-label="Tipo de Manutencao">{item.acao || '-'}</td>
-              <td data-label="Registro">{item.dataHoraRegistro || '-'}</td>
+              <td className="duration-cell" data-label="Duração">{formatMinutes(getDurationInMinutes(item))}</td>
+              <td data-label="Data da Parada">{getRecordDateDisplay(item.dataHoraRegistro) || '-'}</td>
               <td data-label="Acoes">
                 <div className="acoes-inline">
                   {pagePermissions['historico-editar'] && (
@@ -1941,7 +2004,8 @@ function HistoricoDatasPage() {
             <th>Supervisao</th>
             <th>Inicio</th>
             <th>Fim</th>
-            <th>Registro</th>
+            <th>Duração</th>
+            <th>Data da Parada</th>
           </tr>
         </thead>
         <tbody>
@@ -1956,7 +2020,8 @@ function HistoricoDatasPage() {
               <td data-label="Supervisao">{item.supervisor || '-'}</td>
               <td data-label="Inicio">{item.horaInicio || '-'}</td>
               <td data-label="Fim">{item.horaFim || '-'}</td>
-              <td data-label="Registro">{item.dataHoraRegistro || '-'}</td>
+              <td className="duration-cell" data-label="Duração">{formatMinutes(getDurationInMinutes(item))}</td>
+              <td data-label="Data da Parada">{getRecordDateDisplay(item.dataHoraRegistro) || '-'}</td>
             </tr>
           ))}
         </tbody>
