@@ -28,7 +28,7 @@ import {
   writeAuditLog
 } from './store';
 // Importações de componentes de página
-import { formatDateOnly, formatDateTime, formatMinutes, getDurationInMinutes } from './utils';
+import { buildTimestampFromTime, formatDateOnly, formatDateTime, formatElapsed, formatMinutes, getDurationInMinutes } from './utils';
 // Importações de estilos
 const DowntimeTimelineChart = lazy(() => import('./DowntimeTimelineChart'));
 const MaintenanceMetricsDashboard = lazy(() => import('./MaintenanceMetricsDashboard'));
@@ -973,6 +973,8 @@ function DashboardPage({ pagePermissions }) {
         supervisor: equipamento.supervisor,
         horaInicio: equipamento.horaInicio,
         horaFim: equipamento.horaFim,
+        inicioTimestamp: equipamento.inicioTimestamp,
+        fimTimestamp: equipamento.fimTimestamp,
         dataHoraCadastro: equipamento.dataHoraCadastro,
         acao,
         dataHoraRegistro: formatDateTime(new Date())
@@ -1011,8 +1013,18 @@ function DashboardPage({ pagePermissions }) {
     const dataHoraCadastro = formatDateOnly(new Date());
     const equipamentoAtual = editandoIndex !== null ? equipamentos[editandoIndex] : null;
 
+    const agora = new Date();
+    const inicioTimestamp = equipamentoAtual?.inicioTimestamp || agora.toISOString();
+    const fimTimestamp = !formData.horaFim
+      ? undefined
+      : equipamentoAtual?.fimTimestamp && formData.horaFim === (equipamentoAtual.horaFim || '')
+        ? equipamentoAtual.fimTimestamp
+        : buildTimestampFromTime(formData.horaFim, agora, true);
+
     const equipamentoObj = {
       id: equipamentoAtual?.id ?? nextId,
+      inicioTimestamp,
+      fimTimestamp,
       nome: formData.nome.trim(),
       tagEquipamento: formData.tagEquipamento.trim(),
       status: formData.status,
@@ -1265,7 +1277,7 @@ function DashboardPage({ pagePermissions }) {
               <td data-label="Supervisao">{equip.supervisor || '-'}</td>
               <td data-label="Horario Inicio">{equip.horaInicio || '-'}</td>
               <td data-label="Horario Fim">{equip.horaFim || '-'}</td>
-              <td data-label="Data do Cadastro">{String(equip.dataHoraCadastro || '-').split(',')[0].trim()}</td>
+              <td data-label="Data do Cadastro">{String(equip.dataHoraCadastro || '-').split(',')[0]              .trim()}</td>
               {(pagePermissions['status-mina-editar'] || pagePermissions['status-mina-excluir']) && (
                 <td data-label="Acoes">
                   <div className="acoes-inline">
@@ -1353,6 +1365,12 @@ function getRecordDateDisplay(value) {
 
 function HistoricoPage({ pagePermissions }) {
   const [historicoParadas, setHistoricoParadas] = useState([]);
+  const [agoraMs, setAgoraMs] = useState(() => Date.now());
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setAgoraMs(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
   const [editId, setEditId] = useState(null);
   const editFormRef = useRef(null);
   const [editData, setEditData] = useState({
@@ -1447,7 +1465,7 @@ function HistoricoPage({ pagePermissions }) {
       causa: item.causa || '',
       supervisor: item.supervisor || '',
       horaInicio: item.horaInicio || '',
-      horaFim: item.horaFim || '',
+      horaFim: item.horaFim || new Date().toTimeString().slice(0, 5),
       dataHoraRegistro: getRecordDateDisplay(item.dataHoraRegistro),
       acao: ['corretiva', 'preventiva', 'preditiva', 'programada'].includes(item.acao) ? item.acao : 'corretiva'
     });
@@ -1491,15 +1509,34 @@ function HistoricoPage({ pagePermissions }) {
         return item;
       }
 
-      return {
+      const agora = new Date();
+      const inicioAlterado = editData.horaInicio !== (item.horaInicio || '');
+      const fimAlterado = editData.horaFim !== (item.horaFim || '');
+      const inicioTimestamp = inicioAlterado
+        ? buildTimestampFromTime(editData.horaInicio, agora, false)
+        : item.inicioTimestamp;
+      const fimTimestamp = !editData.horaFim
+        ? undefined
+        : fimAlterado || !item.fimTimestamp
+          ? buildTimestampFromTime(editData.horaFim, agora, true)
+          : item.fimTimestamp;
+
+      const atualizado = {
         ...item,
         ...editData,
+        inicioTimestamp,
+        fimTimestamp,
         nome: editData.nome.trim(),
         causa: editData.causa.trim(),
         supervisor: editData.supervisor.trim(),
         dataHoraRegistro: dataHoraRegistroConvertida
           ? formatDateOnly(dataHoraRegistroConvertida)
           : item.dataHoraRegistro
+      };
+
+      return {
+        ...atualizado,
+        duracaoMinutos: atualizado.horaFim ? getDurationInMinutes(atualizado) : undefined
       };
     });
 
@@ -1693,8 +1730,8 @@ function HistoricoPage({ pagePermissions }) {
               <td data-label="Descrição da Parada">{item.causa || '-'}</td>
               <td data-label="Supervisao">{item.supervisor || '-'}</td>
               <td data-label="Inicio">{item.horaInicio || '-'}</td>
-              <td data-label="Fim">{item.horaFim || '-'}</td>
-              <td className="duration-cell" data-label="Duração">{formatMinutes(getDurationInMinutes(item))}</td>
+              <td data-label="Fim">{item.horaFim || 'Em andamento'}</td>
+              <td className="duration-cell" data-label="Duração">{!item.horaFim && item.inicioTimestamp ? formatElapsed(agoraMs - Date.parse(item.inicioTimestamp)) : formatMinutes(getDurationInMinutes(item))}</td>
               <td data-label="Data da Parada">{getRecordDateDisplay(item.dataHoraRegistro) || '-'}</td>
               <td data-label="Acoes">
                 <div className="acoes-inline">
