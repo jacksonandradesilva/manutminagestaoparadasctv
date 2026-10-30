@@ -28,7 +28,7 @@ import {
   writeAuditLog
 } from './store';
 // Importações de componentes de página
-import { buildTimestampFromTime, formatDateOnly, formatDateTime, formatElapsed, formatMinutes, getDurationInMinutes } from './utils';
+import { buildTimestampFromTime, formatDateOnly, formatDateTime, formatElapsed, formatMinutes, getDurationInMinutes, getOngoingDurationMilliseconds } from './utils';
 // Importações de estilos
 const DowntimeTimelineChart = lazy(() => import('./DowntimeTimelineChart'));
 const MaintenanceMetricsDashboard = lazy(() => import('./MaintenanceMetricsDashboard'));
@@ -103,7 +103,7 @@ function toParadaBase(historicoParadas) {
   return onlyParado.length > 0 ? onlyParado : list;
 }
 
-function groupParadasBy(list, fieldName) {
+function groupParadasBy(list, fieldName, nowMs = Date.now()) {
   const grouped = new Map();
 
   list.forEach((item) => {
@@ -113,7 +113,7 @@ function groupParadasBy(list, fieldName) {
     grouped.set(key, {
       label: key,
       quantidade: prev.quantidade + 1,
-      minutos: prev.minutos + getDurationInMinutes(item)
+      minutos: prev.minutos + getDurationInMinutes(item, nowMs)
     });
   });
 
@@ -126,7 +126,7 @@ function groupParadasBy(list, fieldName) {
   });
 }
 
-function buildAgentReply(question, historicoParadas) {
+function buildAgentReply(question, historicoParadas, nowMs = Date.now()) {
   const pergunta = normalizeText(question);
   const baseParadas = toParadaBase(historicoParadas);
 
@@ -144,11 +144,11 @@ function buildAgentReply(question, historicoParadas) {
     };
   }
 
-  const painelRank = groupParadasBy(baseParadas, 'nome');
-  const supervisaoRank = groupParadasBy(baseParadas, 'supervisor');
-  const turnoRank = groupParadasBy(baseParadas, 'turno');
-  const turmaRank = groupParadasBy(baseParadas, 'turma');
-  const totalMinutos = baseParadas.reduce((acc, item) => acc + getDurationInMinutes(item), 0);
+  const painelRank = groupParadasBy(baseParadas, 'nome', nowMs);
+  const supervisaoRank = groupParadasBy(baseParadas, 'supervisor', nowMs);
+  const turnoRank = groupParadasBy(baseParadas, 'turno', nowMs);
+  const turmaRank = groupParadasBy(baseParadas, 'turma', nowMs);
+  const totalMinutos = baseParadas.reduce((acc, item) => acc + getDurationInMinutes(item, nowMs), 0);
 
   const wantsPainel = pergunta.includes('painel');
   const wantsEquipamento = pergunta.includes('tag') || pergunta.includes('equipamento') || pergunta.includes('equip');
@@ -169,12 +169,12 @@ function buildAgentReply(question, historicoParadas) {
       };
     }
 
-    const rankingTags = groupParadasBy(paradasComTag, 'tagEquipamento');
+    const rankingTags = groupParadasBy(paradasComTag, 'tagEquipamento', nowMs);
     const equipamentoMaisParadas = rankingTags[0];
     const paradasDoEquipamento = paradasComTag.filter(
       (item) => String(item.tagEquipamento || '').trim() === equipamentoMaisParadas.label
     );
-    const supervisaoMaisParadas = groupParadasBy(paradasDoEquipamento, 'supervisor')[0];
+    const supervisaoMaisParadas = groupParadasBy(paradasDoEquipamento, 'supervisor', nowMs)[0];
 
     return {
       title: 'Equipamento com mais paradas',
@@ -896,6 +896,17 @@ function PageFooter() {
   return <footer className="page-footer">Criado por: Jackson A. Silva</footer>;
 }
 
+function useCurrentTime() {
+  const [nowMs, setNowMs] = useState(() => Date.now());
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNowMs(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  return nowMs;
+}
+
 function DashboardPage({ pagePermissions }) {
   const [equipamentos, setEquipamentos] = useState([]);
   const [historicoParadas, setHistoricoParadas] = useState([]);
@@ -1014,7 +1025,12 @@ function DashboardPage({ pagePermissions }) {
     const equipamentoAtual = editandoIndex !== null ? equipamentos[editandoIndex] : null;
 
     const agora = new Date();
-    const inicioTimestamp = equipamentoAtual?.inicioTimestamp || agora.toISOString();
+    const inicioAlterado = Boolean(
+      equipamentoAtual && formData.horaInicio !== (equipamentoAtual.horaInicio || '')
+    );
+    const inicioTimestamp = equipamentoAtual && !inicioAlterado && equipamentoAtual.inicioTimestamp
+      ? equipamentoAtual.inicioTimestamp
+      : buildTimestampFromTime(formData.horaInicio, agora, false) || agora.toISOString();
     const fimTimestamp = !formData.horaFim
       ? undefined
       : equipamentoAtual?.fimTimestamp && formData.horaFim === (equipamentoAtual.horaFim || '')
@@ -1300,35 +1316,6 @@ function DashboardPage({ pagePermissions }) {
   );
 }
 
-function parseBrazilianDateTime(value) {
-  const match = String(value || '').trim().match(/^(\d{2})\/(\d{2})\/(\d{4}),?\s*(\d{2}):(\d{2})(?::(\d{2}))?$/);
-  if (!match) {
-    return null;
-  }
-
-  const [, dayText, monthText, yearText, hoursText, minutesText, secondsText = '00'] = match;
-  const day = Number(dayText);
-  const month = Number(monthText);
-  const year = Number(yearText);
-  const hours = Number(hoursText);
-  const minutes = Number(minutesText);
-  const seconds = Number(secondsText);
-  const date = new Date(year, month - 1, day, hours, minutes, seconds);
-
-  if (
-    date.getFullYear() !== year ||
-    date.getMonth() !== month - 1 ||
-    date.getDate() !== day ||
-    date.getHours() !== hours ||
-    date.getMinutes() !== minutes ||
-    date.getSeconds() !== seconds
-  ) {
-    return null;
-  }
-
-  return date;
-}
-
 function parseBrazilianDate(value) {
   const match = String(value || '').trim().match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
   if (!match) {
@@ -1365,12 +1352,7 @@ function getRecordDateDisplay(value) {
 
 function HistoricoPage({ pagePermissions }) {
   const [historicoParadas, setHistoricoParadas] = useState([]);
-  const [agoraMs, setAgoraMs] = useState(() => Date.now());
-
-  useEffect(() => {
-    const timer = window.setInterval(() => setAgoraMs(Date.now()), 1000);
-    return () => window.clearInterval(timer);
-  }, []);
+  const agoraMs = useCurrentTime();
   const [editId, setEditId] = useState(null);
   const editFormRef = useRef(null);
   const [editData, setEditData] = useState({
@@ -1388,9 +1370,9 @@ function HistoricoPage({ pagePermissions }) {
   });
 
   const totalHorasParadas = useMemo(() => {
-    const accumulated = historicoParadas.reduce((total, item) => total + getDurationInMinutes(item), 0);
+    const accumulated = historicoParadas.reduce((total, item) => total + getDurationInMinutes(item, agoraMs), 0);
     return formatMinutes(accumulated);
-  }, [historicoParadas]);
+  }, [agoraMs, historicoParadas]);
 
   const resumoSupervisoes = useMemo(() => {
     const agrupado = new Map();
@@ -1399,12 +1381,12 @@ function HistoricoPage({ pagePermissions }) {
       const nome = String(item.supervisor || '').trim() || 'Nao informado';
       const atual = agrupado.get(nome) || { nome, quantidade: 0, minutos: 0 };
       atual.quantidade += 1;
-      atual.minutos += getDurationInMinutes(item);
+      atual.minutos += getDurationInMinutes(item, agoraMs);
       agrupado.set(nome, atual);
     });
 
     return [...agrupado.values()].sort((first, second) => second.minutos - first.minutos);
-  }, [historicoParadas]);
+  }, [agoraMs, historicoParadas]);
 
   const maiorDuracaoSupervisao = resumoSupervisoes[0]?.minutos || 0;
 
@@ -1465,7 +1447,7 @@ function HistoricoPage({ pagePermissions }) {
       causa: item.causa || '',
       supervisor: item.supervisor || '',
       horaInicio: item.horaInicio || '',
-      horaFim: item.horaFim || new Date().toTimeString().slice(0, 5),
+      horaFim: item.horaFim || '',
       dataHoraRegistro: getRecordDateDisplay(item.dataHoraRegistro),
       acao: ['corretiva', 'preventiva', 'preditiva', 'programada'].includes(item.acao) ? item.acao : 'corretiva'
     });
@@ -1536,7 +1518,7 @@ function HistoricoPage({ pagePermissions }) {
 
       return {
         ...atualizado,
-        duracaoMinutos: atualizado.horaFim ? getDurationInMinutes(atualizado) : undefined
+        duracaoMinutos: atualizado.horaFim ? getDurationInMinutes(atualizado, Date.now()) : undefined
       };
     });
 
@@ -1644,7 +1626,7 @@ function HistoricoPage({ pagePermissions }) {
             <input
               className="duration-field"
               type="text"
-              value={formatMinutes(getDurationInMinutes(editData))}
+              value={formatMinutes(getDurationInMinutes(editData, agoraMs))}
               readOnly
             />
           </div>
@@ -1731,7 +1713,11 @@ function HistoricoPage({ pagePermissions }) {
               <td data-label="Supervisao">{item.supervisor || '-'}</td>
               <td data-label="Inicio">{item.horaInicio || '-'}</td>
               <td data-label="Fim">{item.horaFim || 'Em andamento'}</td>
-              <td className="duration-cell" data-label="Duração">{!item.horaFim && item.inicioTimestamp ? formatElapsed(agoraMs - Date.parse(item.inicioTimestamp)) : formatMinutes(getDurationInMinutes(item))}</td>
+              <td className="duration-cell" data-label="Duração">
+                {getOngoingDurationMilliseconds(item, agoraMs) !== null
+                  ? formatElapsed(getOngoingDurationMilliseconds(item, agoraMs))
+                  : formatMinutes(getDurationInMinutes(item, agoraMs))}
+              </td>
               <td data-label="Data da Parada">{getRecordDateDisplay(item.dataHoraRegistro) || '-'}</td>
               <td data-label="Acoes">
                 <div className="acoes-inline">
@@ -1757,6 +1743,7 @@ function HistoricoPage({ pagePermissions }) {
 
 function HistoricoOpcoesPage() {
   const [historicoCompleto, setHistoricoCompleto] = useState([]);
+  const agoraMs = useCurrentTime();
   const [filtroNome, setFiltroNome] = useState('');
   const [filtroSupervisor, setFiltroSupervisor] = useState('');
   const [filtroStatus, setFiltroStatus] = useState('');
@@ -1803,18 +1790,18 @@ function HistoricoOpcoesPage() {
   }, [nomeFiltro, filtradosBase]);
 
   const totalHorarioFiltrado = useMemo(() => {
-    const totalMin = filtradosBase.reduce((total, item) => total + getDurationInMinutes(item), 0);
+    const totalMin = filtradosBase.reduce((total, item) => total + getDurationInMinutes(item, agoraMs), 0);
     return formatMinutes(totalMin);
-  }, [filtradosBase]);
+  }, [agoraMs, filtradosBase]);
 
   const totalHorarioPainel = useMemo(() => {
     if (!nomeFiltro) {
       return '00:00';
     }
 
-    const totalMin = filtrados.reduce((total, item) => total + getDurationInMinutes(item), 0);
+    const totalMin = filtrados.reduce((total, item) => total + getDurationInMinutes(item, agoraMs), 0);
     return formatMinutes(totalMin);
-  }, [nomeFiltro, filtrados]);
+  }, [agoraMs, nomeFiltro, filtrados]);
 
   return (
     <main className="page-shell">
@@ -1911,6 +1898,7 @@ function HistoricoOpcoesPage() {
 
 function HistoricoDatasPage() {
   const [historicoParadas, setHistoricoParadas] = useState([]);
+  const agoraMs = useCurrentTime();
   const [dataInicial, setDataInicial] = useState('');
   const [dataFinal, setDataFinal] = useState('');
   const [tagFiltro, setTagFiltro] = useState('');
@@ -1967,9 +1955,9 @@ function HistoricoDatasPage() {
   }, [dataInicial, dataFinal, historicoParadas, intervaloInvalido, supervisorFiltro, tagFiltro]);
 
   const tempoTotal = useMemo(() => {
-    const total = filtrados.reduce((sum, item) => sum + getDurationInMinutes(item), 0);
+    const total = filtrados.reduce((sum, item) => sum + getDurationInMinutes(item, agoraMs), 0);
     return formatMinutes(total);
-  }, [filtrados]);
+  }, [agoraMs, filtrados]);
 
   function limparFiltros() {
     setDataInicial('');
@@ -2067,7 +2055,7 @@ function HistoricoDatasPage() {
               <td data-label="Supervisao">{item.supervisor || '-'}</td>
               <td data-label="Inicio">{item.horaInicio || '-'}</td>
               <td data-label="Fim">{item.horaFim || '-'}</td>
-              <td className="duration-cell" data-label="Duração">{formatMinutes(getDurationInMinutes(item))}</td>
+              <td className="duration-cell" data-label="Duração">{formatMinutes(getDurationInMinutes(item, agoraMs))}</td>
               <td data-label="Data da Parada">{getRecordDateDisplay(item.dataHoraRegistro) || '-'}</td>
             </tr>
           ))}
@@ -2084,6 +2072,7 @@ function HistoricoDatasPage() {
 function DashboardTurnosPage() {
   const [historicoParadas, setHistoricoParadas] = useState([]);
   const [filtroTurno, setFiltroTurno] = useState('');
+  const agoraMs = useCurrentTime();
 
   useEffect(() => {
     let active = true;
@@ -2121,15 +2110,15 @@ function DashboardTurnosPage() {
       }
 
       base[item.turno].quantidade += 1;
-      base[item.turno].minutos += getDurationInMinutes(item);
+      base[item.turno].minutos += getDurationInMinutes(item, agoraMs);
     });
 
     return base;
-  }, [historicoParadas]);
+  }, [agoraMs, historicoParadas]);
 
   const totalMinutos = useMemo(() => {
-    return historicoParadas.reduce((total, item) => total + getDurationInMinutes(item), 0);
-  }, [historicoParadas]);
+    return historicoParadas.reduce((total, item) => total + getDurationInMinutes(item, agoraMs), 0);
+  }, [agoraMs, historicoParadas]);
 
   const itensFiltrados = useMemo(() => {
     if (!filtroTurno) {
@@ -2211,7 +2200,7 @@ function DashboardTurnosPage() {
               <td data-label="Turma">{item.turma || '-'}</td>
               <td data-label="Inicio">{item.horaInicio || '-'}</td>
               <td data-label="Fim">{item.horaFim || '-'}</td>
-              <td data-label="Duracao">{formatMinutes(getDurationInMinutes(item))}</td>
+              <td data-label="Duracao">{formatMinutes(getDurationInMinutes(item, agoraMs))}</td>
               <td data-label="Registro">{item.dataHoraRegistro || '-'}</td>
             </tr>
           ))}
@@ -2227,6 +2216,7 @@ function DashboardTurnosPage() {
 
 function RelatorioPorTurnoPage() {
   const [historicoParadas, setHistoricoParadas] = useState([]);
+  const agoraMs = useCurrentTime();
   const [turnoAtivo, setTurnoAtivo] = useState('A');
   const [notasTurno, setNotasTurno] = useState({});
   const [turmaOpcional, setTurmaOpcional] = useState('A');
@@ -2325,11 +2315,11 @@ function RelatorioPorTurnoPage() {
       }
 
       base[item.turno].quantidade += 1;
-      base[item.turno].minutos += getDurationInMinutes(item);
+      base[item.turno].minutos += getDurationInMinutes(item, agoraMs);
     });
 
     return base;
-  }, [historicoParadas]);
+  }, [agoraMs, historicoParadas]);
 
   const registrosTurnoAtivo = useMemo(() => {
     return historicoParadas.filter((item) => item.turno === turnoAtivo);
@@ -2449,7 +2439,7 @@ function RelatorioPorTurnoPage() {
               <td data-label="Equipe de Manutencao">{item.causa || '-'}</td>
               <td data-label="Inicio">{item.horaInicio || '-'}</td>
               <td data-label="Fim">{item.horaFim || '-'}</td>
-              <td data-label="Duracao">{formatMinutes(getDurationInMinutes(item))}</td>
+              <td data-label="Duracao">{formatMinutes(getDurationInMinutes(item, agoraMs))}</td>
               <td data-label="Cadastro">{item.dataHoraCadastro || item.dataHoraRegistro || '-'}</td>
             </tr>
           ))}
@@ -2469,6 +2459,7 @@ function AgenteIAPage() {
   const [historicoParadas, setHistoricoParadas] = useState([]);
   const [pergunta, setPergunta] = useState('');
   const [resposta, setResposta] = useState(null);
+  const agoraMs = useCurrentTime();
 
   useEffect(() => {
     let active = true;
@@ -2492,21 +2483,21 @@ function AgenteIAPage() {
   const baseParadas = useMemo(() => toParadaBase(historicoParadas), [historicoParadas]);
 
   const rankingPaineis = useMemo(() => {
-    return groupParadasBy(baseParadas, 'nome').slice(0, 5);
-  }, [baseParadas]);
+    return groupParadasBy(baseParadas, 'nome', agoraMs).slice(0, 5);
+  }, [agoraMs, baseParadas]);
 
   const totalMinutos = useMemo(() => {
-    return baseParadas.reduce((total, item) => total + getDurationInMinutes(item), 0);
-  }, [baseParadas]);
+    return baseParadas.reduce((total, item) => total + getDurationInMinutes(item, agoraMs), 0);
+  }, [agoraMs, baseParadas]);
 
   function enviarPergunta(event) {
     event.preventDefault();
-    setResposta(buildAgentReply(pergunta, historicoParadas));
+    setResposta(buildAgentReply(pergunta, historicoParadas, agoraMs));
   }
 
   function usarSugestao(texto) {
     setPergunta(texto);
-    setResposta(buildAgentReply(texto, historicoParadas));
+    setResposta(buildAgentReply(texto, historicoParadas, agoraMs));
   }
 
   return (
@@ -2594,6 +2585,7 @@ function GraficosSupervisaoPage() {
   const [historicoParadas, setHistoricoParadas] = useState([]);
   const [dataInicial, setDataInicial] = useState('');
   const [dataFinal, setDataFinal] = useState('');
+  const agoraMs = useCurrentTime();
 
   useEffect(() => {
     let active = true;
@@ -2634,12 +2626,12 @@ function GraficosSupervisaoPage() {
       const nome = String(item.supervisor || '').trim() || 'Nao informado';
       const atual = agrupado.get(nome) || { nome, quantidade: 0, minutos: 0 };
       atual.quantidade += 1;
-      atual.minutos += getDurationInMinutes(item);
+      atual.minutos += getDurationInMinutes(item, agoraMs);
       agrupado.set(nome, atual);
     });
 
     return [...agrupado.values()].sort((first, second) => second.minutos - first.minutos);
-  }, [paradasFiltradas]);
+  }, [agoraMs, paradasFiltradas]);
 
   const resumoEquipamentos = useMemo(() => {
     const agrupado = new Map();
@@ -2653,12 +2645,12 @@ function GraficosSupervisaoPage() {
         : tag || nomeEquipamento || 'Nao informado';
       const atual = agrupado.get(chave) || { nome, quantidade: 0, minutos: 0 };
       atual.quantidade += 1;
-      atual.minutos += getDurationInMinutes(item);
+      atual.minutos += getDurationInMinutes(item, agoraMs);
       agrupado.set(chave, atual);
     });
 
     return [...agrupado.values()].sort((first, second) => second.minutos - first.minutos);
-  }, [paradasFiltradas]);
+  }, [agoraMs, paradasFiltradas]);
 
   const resumoPorData = useMemo(() => {
     const agrupado = new Map();
@@ -2670,7 +2662,7 @@ function GraficosSupervisaoPage() {
       }
 
       const atual = agrupado.get(data) || { data, minutos: 0, quantidade: 0, horarios: [] };
-      atual.minutos += getDurationInMinutes(item);
+      atual.minutos += getDurationInMinutes(item, agoraMs);
       atual.quantidade += 1;
       atual.horarios.push({
         inicio: item.horaInicio || '--:--',
@@ -2681,7 +2673,7 @@ function GraficosSupervisaoPage() {
     });
 
     return [...agrupado.values()].sort((first, second) => first.data.localeCompare(second.data));
-  }, [paradasFiltradas]);
+  }, [agoraMs, paradasFiltradas]);
 
   const totalMinutos = resumoSupervisoes.reduce((total, item) => total + item.minutos, 0);
   const maiorDuracao = resumoSupervisoes[0]?.minutos || 0;
