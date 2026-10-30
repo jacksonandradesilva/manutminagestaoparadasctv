@@ -1374,6 +1374,17 @@ function HistoricoPage({ pagePermissions }) {
     return formatMinutes(accumulated);
   }, [agoraMs, historicoParadas]);
 
+  const historicoOrdenado = useMemo(() => {
+    const emAndamento = [];
+    const finalizadas = [];
+
+    historicoParadas.forEach((item) => {
+      (String(item.horaFim || '').trim() ? finalizadas : emAndamento).push(item);
+    });
+
+    return [...emAndamento, ...finalizadas];
+  }, [historicoParadas]);
+
   const resumoSupervisoes = useMemo(() => {
     const agrupado = new Map();
 
@@ -1692,7 +1703,7 @@ function HistoricoPage({ pagePermissions }) {
           </tr>
         </thead>
         <tbody>
-          {historicoParadas.map((item) => (
+          {historicoOrdenado.map((item) => (
             <tr key={item.idHistorico}>
               <td data-label="Painel">{item.nome || '-'}</td>
               <td data-label="Tag do Equipamento">{item.tagEquipamento || '-'}</td>
