@@ -28,7 +28,7 @@ import {
   writeAuditLog
 } from './store';
 // Importações de componentes de página
-import { buildTimestampFromTime, formatDateOnly, formatDateTime, formatElapsed, formatMinutes, getDurationInMinutes, getOngoingDurationMilliseconds } from './utils';
+import { buildTimestampFromTime, formatDateOnly, formatDateTime, formatElapsed, formatMinutes, getDurationInMinutes, getOngoingDurationMilliseconds, parseTimeToMinutes } from './utils';
 // Importações de estilos
 const DowntimeTimelineChart = lazy(() => import('./DowntimeTimelineChart'));
 const MaintenanceMetricsDashboard = lazy(() => import('./MaintenanceMetricsDashboard'));
@@ -1505,14 +1505,39 @@ function HistoricoPage({ pagePermissions }) {
       const agora = new Date();
       const inicioAlterado = editData.horaInicio !== (item.horaInicio || '');
       const fimAlterado = editData.horaFim !== (item.horaFim || '');
-      const inicioTimestamp = inicioAlterado
-        ? buildTimestampFromTime(editData.horaInicio, agora, false)
-        : item.inicioTimestamp;
+      const dataAlterada = Boolean(dataHoraRegistroConvertida)
+        && formatDateOnly(dataHoraRegistroConvertida) !== getRecordDateDisplay(item.dataHoraRegistro);
+
+      // Com data informada, os horarios sao ancorados nela (fim menor que inicio => dia seguinte).
+      const buildFromDate = (timeValue, isEnd) => {
+        const minutes = parseTimeToMinutes(timeValue);
+        if (minutes === null) {
+          return undefined;
+        }
+        const date = new Date(dataHoraRegistroConvertida);
+        date.setHours(Math.floor(minutes / 60), minutes % 60, 0, 0);
+        if (isEnd) {
+          const startMinutes = parseTimeToMinutes(editData.horaInicio);
+          if (startMinutes !== null && minutes < startMinutes) {
+            date.setDate(date.getDate() + 1);
+          }
+        }
+        return date.toISOString();
+      };
+
+      const recalcular = dataAlterada || inicioAlterado || fimAlterado;
+      const inicioTimestamp = recalcular && dataHoraRegistroConvertida
+        ? buildFromDate(editData.horaInicio, false)
+        : inicioAlterado
+          ? buildTimestampFromTime(editData.horaInicio, agora, false)
+          : item.inicioTimestamp;
       const fimTimestamp = !editData.horaFim
         ? undefined
-        : fimAlterado || !item.fimTimestamp
-          ? buildTimestampFromTime(editData.horaFim, agora, true)
-          : item.fimTimestamp;
+        : recalcular && dataHoraRegistroConvertida
+          ? buildFromDate(editData.horaFim, true)
+          : fimAlterado || !item.fimTimestamp
+            ? buildTimestampFromTime(editData.horaFim, agora, true)
+            : item.fimTimestamp;
 
       const atualizado = {
         ...item,
