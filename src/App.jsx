@@ -32,6 +32,7 @@ import { buildTimestampFromTime, formatDateOnly, formatDateTime, formatElapsed, 
 // Importações de estilos
 const DowntimeTimelineChart = lazy(() => import('./DowntimeTimelineChart'));
 const MaintenanceMetricsDashboard = lazy(() => import('./MaintenanceMetricsDashboard'));
+const MonthlySupervisorComparisonPage = lazy(() => import('./MonthlySupervisorComparisonPage'));
 const LubrificadoresPage = lazy(() => import('./LubrificadoresPage'));
 const GestaoLubrificacaoPage = lazy(() => import('./GestaoLubrificacaoPage'));
 const ExportacaoDadosPage = lazy(() => import('./ExportacaoDadosPage'));
@@ -48,6 +49,7 @@ const PAGE_ACCESS_OPTIONS = [
   { key: 'historico-datas', label: 'Paradas por equipamento e periodo', path: '/filtro-datas' },
   { key: 'dashboard-turnos', label: 'Dashboard por turno', path: '/dashboard-turnos' },
   { key: 'graficos-supervisao', label: 'Graficos por supervisao', path: '/graficos-supervisao' },
+  { key: 'comparativo-supervisao-mensal', label: 'Comparativo mensal por supervisao e equipamento', path: '/comparativo-supervisao-mensal' },
   { key: 'indicadores-manutencao', label: 'Indicadores MTTR / MTBF', path: '/indicadores-manutencao' },
   { key: 'agente-ia', label: 'Agente IA', path: '/agente-ia' },
   { key: 'lubrificadores', label: 'Controle de Lubrificadores', path: '/lubrificadores' },
@@ -1121,7 +1123,7 @@ function DashboardPage({ pagePermissions }) {
       <Header title="Status - Mina Manutencao" />
 
       <div className="top-actions">
-        {pagePermissions.historico && <LinkButton to="/historico">Ver Gestao de Parada da Manutencao</LinkButton>}
+        {pagePermissions.historico && <LinkButton to="/historico">Gestao de Parada da Manutencao</LinkButton>}
         {pagePermissions.lubrificadores && <LinkButton to="/lubrificadores">Controle de Lubrificadores</LinkButton>}
         {pagePermissions['gestao-lubrificacao'] && <LinkButton to="/gestao-lubrificacao">Gestao de Lubrificacao</LinkButton>}
         {pagePermissions['indicadores-manutencao'] && <LinkButton to="/indicadores-manutencao">Indicadores MTTR / MTBF</LinkButton>}
@@ -1130,6 +1132,7 @@ function DashboardPage({ pagePermissions }) {
         {pagePermissions['historico-datas'] && <LinkButton to="/filtro-datas">Paradas por Equipamento</LinkButton>}
         {pagePermissions['dashboard-turnos'] && <LinkButton to="/dashboard-turnos">Dashboard por Turno</LinkButton>}
         {pagePermissions['graficos-supervisao'] && <LinkButton to="/graficos-supervisao">Graficos por Supervisao</LinkButton>}
+        {pagePermissions['comparativo-supervisao-mensal'] && <LinkButton to="/comparativo-supervisao-mensal">Comparativo Mensal por Supervisao e Equipamento</LinkButton>}
         {pagePermissions['agente-ia'] && <LinkButton to="/agente-ia">Agente IA</LinkButton>}
         {pagePermissions['status-mina-excluir'] && equipamentos.some((e) => e.status === 'parado') && (
           <button type="button" className="btn excluir" onClick={limparStatusParado}>Limpar Status Parado</button>
@@ -3027,6 +3030,14 @@ export default function App() {
         <Route path="/filtro-datas" element={renderProtectedPage('historico-datas', <HistoricoDatasPage />)} />
         <Route path="/dashboard-turnos" element={renderProtectedPage('dashboard-turnos', <DashboardTurnosPage />)} />
         <Route path="/graficos-supervisao" element={renderProtectedPage('graficos-supervisao', <GraficosSupervisaoPage />)} />
+        <Route
+          path="/comparativo-supervisao-mensal"
+          element={renderProtectedPage('comparativo-supervisao-mensal', (
+            <Suspense fallback={<main className="page-shell"><p>Carregando comparativo...</p></main>}>
+              <MonthlySupervisorComparisonPage />
+            </Suspense>
+          ))}
+        />
         <Route
           path="/lubrificadores"
           element={renderProtectedPage('lubrificadores', (
