@@ -721,6 +721,26 @@ td.duration-cell {
 	text-align: center;
 }
 
+td.duration-pending {
+	background: #fef08a;
+}
+
+td.duration-ongoing {
+	color: var(--danger-dark);
+	animation: piscar-duracao-andamento 1s ease-in-out infinite;
+}
+
+@keyframes piscar-duracao-andamento {
+	0%, 100% { opacity: 1; }
+	50% { opacity: 0.3; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+	td.duration-ongoing {
+		animation: none;
+	}
+}
+
 form input:focus,
 form textarea:focus,
 form select:focus,
