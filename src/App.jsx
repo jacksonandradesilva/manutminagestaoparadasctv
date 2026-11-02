@@ -1353,6 +1353,10 @@ function getRecordDateDisplay(value) {
   return text.split(',')[0].trim();
 }
 
+function isHistoricoLiberado(item) {
+  return Boolean(String(item.horaInicio || '').trim() && String(item.horaFim || '').trim());
+}
+
 function HistoricoPage({ pagePermissions }) {
   const [historicoParadas, setHistoricoParadas] = useState([]);
   const agoraMs = useCurrentTime();
@@ -1731,45 +1735,49 @@ function HistoricoPage({ pagePermissions }) {
           </tr>
         </thead>
         <tbody>
-          {historicoOrdenado.map((item) => (
-            <tr key={item.idHistorico}>
-              <td data-label="Painel">{item.nome || '-'}</td>
-              <td data-label="Tag do Equipamento">{item.tagEquipamento || '-'}</td>
-              {(() => {
-                const liberado = Boolean(String(item.horaInicio || '').trim() && String(item.horaFim || '').trim());
-                const statusClass = liberado
-                  ? 'status-liberado status-piscante'
-                  : `${item.status ? `status-${item.status}` : ''} ${item.status === 'parado' ? 'status-highlight' : ''}`.trim();
-                return (
-                  <td data-label="Status" className={statusClass}>
-                    {liberado ? 'LIBERADO' : (item.status || '-')}
-                  </td>
-                );
-              })()}
-              <td data-label="Turno">{item.turno || '-'}</td>
-              <td data-label="Turma">{item.turma || '-'}</td>
-              <td data-label="Descrição da Parada">{item.causa || '-'}</td>
-              <td data-label="Supervisao">{item.supervisor || '-'}</td>
-              <td data-label="Inicio">{item.horaInicio || '-'}</td>
-              <td data-label="Fim">{item.horaFim || 'Em andamento'}</td>
-              <td className="duration-cell" data-label="Duração">
-                {getOngoingDurationMilliseconds(item, agoraMs) !== null
-                  ? formatElapsed(getOngoingDurationMilliseconds(item, agoraMs))
-                  : formatMinutes(getDurationInMinutes(item, agoraMs))}
-              </td>
-              <td data-label="Data da Parada">{getRecordDateDisplay(item.dataHoraRegistro) || '-'}</td>
-              <td data-label="Acoes">
-                <div className="acoes-inline">
-                  {pagePermissions['historico-editar'] && (
-                    <button className="btn editar" type="button" onClick={() => abrirEdicao(item)}>Editar</button>
-                  )}
-                  {pagePermissions['historico-excluir'] && (
-                    <button className="btn excluir" type="button" onClick={() => excluirItem(item.idHistorico)}>Excluir</button>
-                  )}
-                </div>
-              </td>
-            </tr>
-          ))}
+          {historicoOrdenado.map((item) => {
+            const duracaoEmAndamento = getOngoingDurationMilliseconds(item, agoraMs);
+
+            return (
+              <tr key={item.idHistorico}>
+                <td data-label="Painel">{item.nome || '-'}</td>
+                <td data-label="Tag do Equipamento">{item.tagEquipamento || '-'}</td>
+                {(() => {
+                  const liberado = isHistoricoLiberado(item);
+                  const statusClass = liberado
+                    ? 'status-liberado status-piscante'
+                    : `${item.status ? `status-${item.status}` : ''} ${item.status === 'parado' ? 'status-highlight' : ''}`.trim();
+                  return (
+                    <td data-label="Status" className={statusClass}>
+                      {liberado ? 'LIBERADO' : (item.status || '-')}
+                    </td>
+                  );
+                })()}
+                <td data-label="Turno">{item.turno || '-'}</td>
+                <td data-label="Turma">{item.turma || '-'}</td>
+                <td data-label="Descrição da Parada">{item.causa || '-'}</td>
+                <td data-label="Supervisao">{item.supervisor || '-'}</td>
+                <td data-label="Inicio">{item.horaInicio || '-'}</td>
+                <td data-label="Fim">{item.horaFim || 'Em andamento'}</td>
+                <td className={`duration-cell${duracaoEmAndamento !== null ? ' duration-ongoing' : ''}`} data-label="Duração">
+                  {duracaoEmAndamento !== null
+                    ? formatElapsed(duracaoEmAndamento)
+                    : formatMinutes(getDurationInMinutes(item, agoraMs))}
+                </td>
+                <td data-label="Data da Parada">{getRecordDateDisplay(item.dataHoraRegistro) || '-'}</td>
+                <td data-label="Acoes">
+                  <div className="acoes-inline">
+                    {pagePermissions['historico-editar'] && (
+                      <button className="btn editar" type="button" onClick={() => abrirEdicao(item)}>Editar</button>
+                    )}
+                    {pagePermissions['historico-excluir'] && (
+                      <button className="btn excluir" type="button" onClick={() => excluirItem(item.idHistorico)}>Excluir</button>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
 
@@ -1921,7 +1929,7 @@ function HistoricoOpcoesPage() {
               <td data-label="Equipe Mecanica">{item.causa || '-'}</td>
               <td data-label="Supervisao">{item.supervisor || '-'}</td>
               <td data-label="Inicio">{item.horaInicio || '-'}</td>
-              <td data-label="Fim">{item.horaFim || '-'}</td>
+              <td data-label="Fim">{item.horaFim || 'Em Andamento'}</td>
               <td data-label="Registro">{item.dataHoraRegistro || '-'}</td>
             </tr>
           ))}
@@ -1983,7 +1991,7 @@ function HistoricoDatasPage() {
       return [];
     }
 
-    return historicoParadas.filter((item) => {
+    const registrosFiltrados = historicoParadas.filter((item) => {
       const dataRegistro = getRecordDateKey(item.dataHoraRegistro);
       const atendeInicio = !dataInicial || (dataRegistro && dataRegistro >= dataInicial);
       const atendeFim = !dataFinal || (dataRegistro && dataRegistro <= dataFinal);
@@ -1991,6 +1999,11 @@ function HistoricoDatasPage() {
       const atendeSupervisor = !supervisorFiltro || item.supervisor === supervisorFiltro;
       return atendeInicio && atendeFim && atendeTag && atendeSupervisor;
     });
+
+    return [
+      ...registrosFiltrados.filter((item) => !isHistoricoLiberado(item)),
+      ...registrosFiltrados.filter(isHistoricoLiberado)
+    ];
   }, [dataInicial, dataFinal, historicoParadas, intervaloInvalido, supervisorFiltro, tagFiltro]);
 
   const tempoTotal = useMemo(() => {
@@ -2078,7 +2091,7 @@ function HistoricoDatasPage() {
               <td data-label="Painel">{item.nome || '-'}</td>
               <td data-label="Tag do Equipamento">{item.tagEquipamento || '-'}</td>
               {(() => {
-                const liberado = Boolean(String(item.horaInicio || '').trim() && String(item.horaFim || '').trim());
+                const liberado = isHistoricoLiberado(item);
                 const statusClass = liberado
                   ? 'status-liberado'
                   : `${item.status ? `status-${item.status}` : ''} ${item.status === 'parado' ? 'status-highlight' : ''}`.trim();
@@ -2093,8 +2106,10 @@ function HistoricoDatasPage() {
               <td data-label="Descrição da Parada">{item.causa || '-'}</td>
               <td data-label="Supervisao">{item.supervisor || '-'}</td>
               <td data-label="Inicio">{item.horaInicio || '-'}</td>
-              <td data-label="Fim">{item.horaFim || '-'}</td>
-              <td className="duration-cell" data-label="Duração">{formatMinutes(getDurationInMinutes(item, agoraMs))}</td>
+              <td data-label="Fim">{item.horaFim || 'Em Andamento'}</td>
+              <td className={`duration-cell${String(item.horaFim || '').trim() ? '' : ' duration-pending'}`} data-label="Duração">
+                {formatMinutes(getDurationInMinutes(item, agoraMs))}
+              </td>
               <td data-label="Data da Parada">{getRecordDateDisplay(item.dataHoraRegistro) || '-'}</td>
             </tr>
           ))}
