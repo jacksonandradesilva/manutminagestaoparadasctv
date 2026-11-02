@@ -17,6 +17,7 @@ export const PAGE_ACCESS_KEYS = [
   'historico-datas',
   'dashboard-turnos',
   'graficos-supervisao',
+  'comparativo-supervisao-mensal',
   'indicadores-manutencao',
   'status-mina-editar',
   'status-mina-excluir',
