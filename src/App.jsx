@@ -913,6 +913,7 @@ function DashboardPage({ pagePermissions }) {
   const [equipamentos, setEquipamentos] = useState([]);
   const [historicoParadas, setHistoricoParadas] = useState([]);
   const [editandoIndex, setEditandoIndex] = useState(null);
+  const agoraMs = useCurrentTime();
   const [formData, setFormData] = useState({
     nome: '',
     tagEquipamento: '',
@@ -940,6 +941,21 @@ function DashboardPage({ pagePermissions }) {
         .filter(Boolean)
     )].sort((first, second) => first.localeCompare(second, 'pt-BR'));
   }, [equipamentos, historicoParadas]);
+
+  const paradasEmAndamento = useMemo(() => {
+    return historicoParadas
+      .map((parada, index) => ({
+        ...parada,
+        index,
+        duracaoMs: getOngoingDurationMilliseconds(parada, agoraMs)
+      }))
+      .filter((parada) =>
+        normalizeText(parada.status) === 'parado' &&
+        !String(parada.horaFim || '').trim() &&
+        !Number.isFinite(Date.parse(parada.fimTimestamp))
+      )
+      .sort((first, second) => (second.duracaoMs ?? 0) - (first.duracaoMs ?? 0));
+  }, [agoraMs, historicoParadas]);
 
   useEffect(() => {
     let active = true;
@@ -1138,6 +1154,52 @@ function DashboardPage({ pagePermissions }) {
           <button type="button" className="btn excluir" onClick={limparStatusParado}>Limpar Status Parado</button>
         )}
       </div>
+
+      <section className="ongoing-downtime-panel" aria-live="polite" aria-labelledby="ongoing-downtime-title">
+        <div className="ongoing-downtime-heading">
+          <div>
+            <h2 id="ongoing-downtime-title">Equipamentos parados em andamento</h2>
+            <p>Acompanhe o tempo das paradas ainda sem horário de encerramento.</p>
+          </div>
+          <span className={`ongoing-downtime-count${paradasEmAndamento.length > 0 ? ' has-downtime' : ''}`}>
+            {paradasEmAndamento.length} {paradasEmAndamento.length === 1 ? 'equipamento' : 'equipamentos'}
+          </span>
+        </div>
+        {paradasEmAndamento.length > 0 ? (
+          <div className="ongoing-downtime-list">
+            {paradasEmAndamento.map((equipamento) => {
+              const alerta = equipamento.duracaoMs !== null && equipamento.duracaoMs >= 3 * 60 * 60 * 1000;
+              return (
+                <article className={`ongoing-downtime-item${alerta ? ' is-alert' : ''}`} key={equipamento.id ?? equipamento.index}>
+                  <div className="ongoing-downtime-asset">
+                    <strong>{equipamento.tagEquipamento || equipamento.nome || 'Equipamento sem identificação'}</strong>
+                    {equipamento.tagEquipamento && equipamento.nome && <span>{equipamento.nome}</span>}
+                  </div>
+                  <div>
+                    <span className="ongoing-downtime-label">Causa</span>
+                    <strong>{equipamento.causa || 'Não informada'}</strong>
+                  </div>
+                  <div>
+                    <span className="ongoing-downtime-label">Início</span>
+                    <strong>{equipamento.horaInicio || 'Não informado'}</strong>
+                  </div>
+                  <div>
+                    <span className="ongoing-downtime-label">Supervisão</span>
+                    <strong>{equipamento.supervisor || 'Não informada'}</strong>
+                  </div>
+                  <div className="ongoing-downtime-duration">
+                    <span className="ongoing-downtime-label">Tempo parado</span>
+                    <strong>{equipamento.duracaoMs === null ? 'Não calculado' : formatElapsed(equipamento.duracaoMs)}</strong>
+                  </div>
+                  {alerta && <span className="ongoing-downtime-alert">Alerta: parada acima de 3 horas</span>}
+                </article>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="ongoing-downtime-empty">Nenhum equipamento parado em andamento no momento.</p>
+        )}
+      </section>
 
       <form onSubmit={handleSubmit}>
         <div className="form-field form-field-wide">
