@@ -1635,6 +1635,112 @@ table,
 	font-size: 13px;
 }
 
+.ongoing-downtime-panel {
+	margin: 20px 0 24px;
+	padding: 20px;
+	border: 1px solid var(--border);
+	border-left: 5px solid var(--info);
+	border-radius: 8px;
+	background: var(--surface);
+	box-shadow: var(--shadow-sm);
+}
+
+.ongoing-downtime-heading {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 16px;
+	margin-bottom: 16px;
+}
+
+.ongoing-downtime-heading h2 {
+	margin: 0;
+}
+
+.ongoing-downtime-heading p {
+	margin: 4px 0 0;
+	color: var(--text-secondary);
+	font-size: 14px;
+}
+
+.ongoing-downtime-count {
+	flex: 0 0 auto;
+	padding: 6px 12px;
+	border-radius: 20px;
+	background: var(--info-bg);
+	color: var(--info-dark);
+	font-size: 13px;
+	font-weight: 700;
+}
+
+.ongoing-downtime-count.has-downtime {
+	background: var(--warning-bg);
+	color: var(--warning-dark);
+}
+
+.ongoing-downtime-list {
+	display: grid;
+	gap: 10px;
+}
+
+.ongoing-downtime-item {
+	display: grid;
+	grid-template-columns: minmax(150px, 1.2fr) minmax(140px, 1fr) repeat(3, minmax(100px, 0.8fr));
+	align-items: center;
+	gap: 12px;
+	padding: 14px;
+	border: 1px solid var(--border-light);
+	border-radius: 6px;
+	background: var(--surface-alt);
+}
+
+.ongoing-downtime-item.is-alert {
+	border-color: var(--danger-light);
+	background: var(--danger-bg);
+}
+
+.ongoing-downtime-item > div {
+	display: grid;
+	gap: 2px;
+	min-width: 0;
+}
+
+.ongoing-downtime-item strong {
+	overflow-wrap: anywhere;
+}
+
+.ongoing-downtime-label {
+	color: var(--text-tertiary);
+	font-size: 11px;
+	font-weight: 700;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+}
+
+.ongoing-downtime-duration strong {
+	color: var(--info-dark);
+	font-variant-numeric: tabular-nums;
+}
+
+.is-alert .ongoing-downtime-duration strong {
+	color: var(--danger-dark);
+}
+
+.ongoing-downtime-alert {
+	grid-column: 1 / -1;
+	color: var(--danger-dark);
+	font-size: 13px;
+	font-weight: 700;
+}
+
+.ongoing-downtime-empty {
+	margin: 0;
+	padding: 12px;
+	border-radius: 6px;
+	background: var(--success-bg);
+	color: var(--success-dark);
+}
+
 @media (max-width: 768px) {
 	.maintenance-dashboard-subtitle {
 		margin-top: -18px;
@@ -1655,6 +1761,15 @@ table,
 
 	.maintenance-chart {
 		height: 240px;
+	}
+
+	.ongoing-downtime-heading {
+		align-items: flex-start;
+		flex-direction: column;
+	}
+
+	.ongoing-downtime-item {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
 	}
 }
 
