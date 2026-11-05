@@ -1731,6 +1731,13 @@ table,
 	color: var(--danger-dark);
 	font-size: 13px;
 	font-weight: 700;
+	animation: piscar-duracao-andamento 1s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.ongoing-downtime-alert {
+		animation: none;
+	}
 }
 
 .ongoing-downtime-empty {
